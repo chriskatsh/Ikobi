@@ -11,7 +11,7 @@ const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const MAX_CODES_PER_HOUR = 5;
 
-export function createAuthService({ db, whatsapp, config }) {
+export function createAuthService({ db, whatsapp, config, audit }) {
   const hash = (phone, code) => crypto.createHmac('sha256', config.otpSecret).update(`${phone}:${code}`).digest('hex');
 
   async function requestOtp(rawPhone) {
@@ -49,6 +49,11 @@ export function createAuthService({ db, whatsapp, config }) {
       await db('users').where({ id: user.id }).update({ name: name.trim().slice(0, 80) });
       user = await db('users').where({ id: user.id }).first();
     }
+    if (config.platformAdmins?.includes(phone) && user.platform_role !== 'admin') {
+      await db('users').where({ id: user.id }).update({ platform_role: 'admin' });
+      await audit?.log({ actorType: 'system', action: 'role.granted', entity: 'user', entityId: user.id, data: { role: 'admin', via: 'PLATFORM_ADMIN_PHONES' } });
+      user = await db('users').where({ id: user.id }).first();
+    }
     const token = jwt.sign({ sub: user.id }, config.jwtSecret, { expiresIn: '60d' });
     return { token, user: publicUser(user), isNew: !user.name };
   }
@@ -79,5 +84,9 @@ export function createAuthService({ db, whatsapp, config }) {
 }
 
 export function publicUser(u) {
-  return { id: u.id, phone: u.phone, name: u.name };
+  return { id: u.id, phone: u.phone, name: u.name, platformRole: u.platform_role ?? null, kycStatus: u.kyc_status ?? 'none' };
+}
+
+export function requireRole(...roles) {
+  return (req, _res, next) => (roles.includes(req.user?.platform_role) ? next() : next(new HttpError(403, 'forbidden', 'Accès réservé à l’équipe Ikobi')));
 }

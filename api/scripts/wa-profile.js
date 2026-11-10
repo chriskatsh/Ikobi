@@ -6,7 +6,7 @@ const { WA_PHONE_NUMBER_ID, WA_ACCESS_TOKEN, WA_GRAPH_VERSION = 'v21.0' } = proc
 
 const PROFILE = {
   messaging_product: 'whatsapp',
-  about: 'Ikobi — ta tontine en toute sécurité. Écris « menu ».',
+  about: 'Ikobi — ta tontine, en toute transparence. Écris « menu ».',
   description:
     'Ikobi organise ta tontine (likelemba) : cotisations par M-Pesa, Orange Money, Airtel Money et Afrimoney, ' +
     'rappels et suivi transparent. Écris « cotiser », « statut » ou « rejoindre CODE ».',

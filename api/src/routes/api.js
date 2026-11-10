@@ -20,7 +20,7 @@ const createGroupSchema = z.object({
   payoutMethod: methodEnum.optional(),
 });
 
-export function apiRoutes({ auth, tontine, db, config }) {
+export function apiRoutes({ auth, tontine, payments, db, config }) {
   const r = Router();
   const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
 
@@ -29,9 +29,9 @@ export function apiRoutes({ auth, tontine, db, config }) {
   r.get('/config', (_req, res) =>
     res.json({
       methods: Object.entries(METHODS).map(([id, label]) => ({ id, label })),
-      currencies: CURRENCIES,
+      currencies: payments.supportedCurrencies('CD'),
       whatsappNumber: config.whatsapp.botNumberDisplay || null,
-      payoutMode: config.payoutMode,
+      requireSettlement: config.requireSettlement,
     }),
   );
 
@@ -113,11 +113,16 @@ export function apiRoutes({ auth, tontine, db, config }) {
     res.status(reused ? 200 : 201).json(await tontine.contributionStatus(req.user.id, contribution.id));
   }));
 
+  r.get('/groups/:id/contributions/quote', needAuth, ah(async (req, res) => {
+    res.json(await tontine.quoteContribution(req.user.id, Number(req.params.id), String(req.query.method || '')));
+  }));
+
   r.get('/contributions/:id', needAuth, ah(async (req, res) => res.json(await tontine.contributionStatus(req.user.id, Number(req.params.id)))));
 
-  r.post('/groups/:id/cycles/:number/payout', needAuth, ah(async (req, res) => {
-    const p = await tontine.initiatePayout(req.user.id, Number(req.params.id), Number(req.params.number));
-    res.status(201).json({ id: p.id, status: p.status, reference: p.reference });
+  // L'organisateur DEMANDE le versement ; l'équipe finance Ikobi l'approuve (contrôle à deux personnes).
+  r.post('/groups/:id/cycles/:number/payout-request', needAuth, ah(async (req, res) => {
+    const p = await tontine.requestPayout(req.user.id, Number(req.params.id), Number(req.params.number));
+    res.status(201).json({ id: p.id, status: p.status });
   }));
 
   return r;

@@ -8,7 +8,7 @@ const POINTS = [
   { icon: '🤝', title: 'Ta likelemba, sans cahier', text: 'Membres, tours et cotisations suivis automatiquement.' },
   { icon: '📲', title: 'Mobile Money intégré', text: 'M-Pesa, Orange Money, Airtel Money, Afrimoney.' },
   { icon: '💬', title: 'Cotise aussi sur WhatsApp', text: 'Écris « cotiser » au bot Ikobi, valide avec ton PIN, c’est fait.' },
-  { icon: '🔒', title: 'Transparent pour tous', text: 'Chacun voit qui a payé. Personne ne garde l’argent en poche.' },
+  { icon: '🔒', title: 'Transparent pour tous', text: 'Chacun voit qui a payé. Chaque mouvement d’argent est tracé.' },
 ];
 
 export default function Welcome() {

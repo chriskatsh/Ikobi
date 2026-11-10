@@ -1,6 +1,6 @@
 // Badges des opérateurs Mobile Money acceptés.
 //
-// Logos officiels : dépose les fichiers PNG fournis par MOKO ou par les opérateurs dans
+// Logos officiels : dépose les fichiers PNG fournis par AWA Network ou par les opérateurs dans
 // assets/operators/ (mpesa.png, orange.png, airtel.png, africell.png), puis décommente
 // les lignes correspondantes dans LOGOS. Sans logo, un badge aux couleurs de l'opérateur s'affiche.
 

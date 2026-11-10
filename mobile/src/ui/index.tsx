@@ -110,7 +110,7 @@ export function Button({
 }
 
 const VARIANTS = {
-  primary: { bg: C.gold, fg: '#1A1405', border: C.gold },
+  primary: { bg: C.gold, fg: '#04140F', border: C.gold },
   secondary: { bg: C.surface2, fg: C.text, border: C.border },
   ghost: { bg: 'transparent', fg: C.gold, border: 'transparent' },
   danger: { bg: C.redDim, fg: C.red, border: C.redDim },

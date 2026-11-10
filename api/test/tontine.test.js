@@ -2,8 +2,10 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { setup } from './helpers.js';
 import { normalizePhone, detectMethod } from '../src/lib/phone.js';
+import { createPaymentOrchestrator } from '../src/services/payments.js';
+import { loadConfig } from '../src/config.js';
 import { addPeriods } from '../src/lib/dates.js';
-import { encryptMokoPayload, decryptMokoPayload, signMoko, createMokoClient, mapTransStatus } from '../src/services/moko.js';
+import { awaSign, awaSignatureString, awaCustomerId, mapAwaStatus, createAwaClient } from '../src/services/awa.js';
 
 describe('utilitaires', () => {
   test('normalise les numéros RDC', () => {
@@ -23,17 +25,81 @@ describe('utilitaires', () => {
     assert.equal(addPeriods('2026-12-15', 'monthly', 1), '2027-01-15');
   });
 
-  test('MOKO : chiffrement, signature et statuts', () => {
-    const key = '0123456789abcdef';
-    const enc = encryptMokoPayload({ Reference: 'IKC-1', Trans_Status: 'Success' }, key);
-    assert.deepEqual(decryptMokoPayload(enc, key), { Reference: 'IKC-1', Trans_Status: 'Success' });
-    const client = createMokoClient({ baseUrl: 'x', aesKey: key, hmacKey: 'hmac-key' });
-    const body = JSON.stringify({ data: enc });
-    assert.equal(client.parseCallback(body, signMoko(enc, 'hmac-key')).Reference, 'IKC-1');
-    assert.throws(() => client.parseCallback(body, 'mauvaise'), /Signature invalide/);
-    assert.equal(mapTransStatus('Successful'), 'success');
-    assert.equal(mapTransStatus('Failed'), 'failed');
-    assert.equal(mapTransStatus('Pending'), 'pending');
+  test('AWA : chaîne à signer conforme à la doc (ordre, sans séparateur)', () => {
+    const params = { merchant_id: 'fffed61be9780b97c5e4c65e4e07bb6b', provider_id: 10, client_id: '080000000', country: 'KE', order_id: 'order_3444298767545', amount: 1000, currency: 'CDF', callback_url: 'https://my.callback.url' };
+    assert.equal(awaSignatureString(params), 'merchant_idfffed61be9780b97c5e4c65e4e07bb6bprovider_id10client_id080000000countryKEorder_idorder_3444298767545amount1000currencyCDFcallback_urlhttps://my.callback.url');
+    assert.equal(awaSignatureString({ a: 1, signature: 'x', result: { code: 0, message: 'OK' } }), 'a1result.code0result.messageOK');
+    assert.match(awaSign(params, 'secret'), /^[0-9a-f]{128}$/);
+  });
+
+  test('AWA : format des numéros par opérateur', () => {
+    assert.equal(awaCustomerId('mpesa', '243812345678'), '243812345678');
+    assert.equal(awaCustomerId('airtel', '243991234567'), '991234567');
+    assert.equal(awaCustomerId('orange', '243851234567'), '0851234567');
+    assert.equal(awaCustomerId('africell', '243901234567'), '0901234567');
+  });
+
+  test('AWA : statuts (indéterminé ≠ échec)', () => {
+    assert.equal(mapAwaStatus(2), 'success');
+    assert.equal(mapAwaStatus(3), 'failed');
+    assert.equal(mapAwaStatus(4), 'failed');
+    for (const s of [-1, 0, 1, 6, 7]) assert.equal(mapAwaStatus(s), 'pending');
+  });
+
+  test('AWA : requête signée, CDF uniquement, callback vérifié', async () => {
+    const calls = [];
+    const fetchImpl = async (url, opts) => {
+      calls.push({ url, body: JSON.parse(opts.body) });
+      return { ok: true, status: 200, json: async () => ({ order_id: 'IKC-1', transaction_id: '', status: 1, result: { code: 0, message: 'OK' }, confirm_type: 0 }) };
+    };
+    const cfg = { baseUrl: 'https://api.awanetwork.tech', publicId: 'PUB', merchantId: 'M1', secretKey: 'k3y' };
+    const awa = createAwaClient(cfg, { fetchImpl, logger: { warn() {} } });
+    const r = await awa.debit({ amount: 20000, currency: 'CDF', phone: '243812345678', method: 'mpesa', reference: 'IKC-1', callbackUrl: 'https://api.ikobi.app/webhooks/awa' });
+    assert.equal(r.accepted, true);
+    assert.equal(r.finalStatus, 'pending');
+    assert.equal(calls[0].url, 'https://api.awanetwork.tech/PUB/payment_c2b');
+    const sent = calls[0].body;
+    assert.equal(sent.amount, '20000.00');
+    assert.equal(sent.provider_id, 2071);
+    const { signature, ...rest } = sent;
+    assert.equal(signature, awaSign(rest, 'k3y'));
+
+    const usd = await awa.debit({ amount: 50, currency: 'USD', phone: '243812345678', method: 'mpesa', reference: 'IKC-2' });
+    assert.equal(usd.accepted, false);
+
+    const cb = { merchant_id: 'M1', operation_type: 17, customer_id: '243812345678', amount: 20000, order_id: 'IKC-1', transaction_id: '77', status: 2, result: { code: 0, message: 'OK' } };
+    const signed = { ...cb, signature: awaSign(cb, 'k3y') };
+    const parsed = awa.parseCallback(JSON.stringify(signed));
+    assert.deepEqual([parsed.reference, parsed.status, parsed.providerTxId], ['IKC-1', 'success', '77']);
+    assert.throws(() => awa.parseCallback(JSON.stringify({ ...signed, amount: 999999 })), /Signature invalide/);
+    const otherMerchant = { ...cb, merchant_id: 'M2' };
+    assert.throws(() => awa.parseCallback(JSON.stringify({ ...otherMerchant, signature: awaSign(otherMerchant, 'k3y') })), /Marchand inconnu/);
+  });
+
+  test('orchestrateur : RDC via AWA en CDF uniquement ; Gabon sans fournisseur', () => {
+    const o = createPaymentOrchestrator({ providers: { awa: { debit() {} } } });
+    assert.deepEqual(o.supportedCurrencies('CD'), ['CDF']);
+    assert.deepEqual(o.supportedCurrencies('GA'), []);
+    assert.throws(() => o.route('CD', 'mpesa', 'USD'), /USD/);
+    assert.throws(() => o.route('GA', 'airtel', 'XAF'), /indisponible/);
+    assert.equal(o.route('CD', 'orange', 'CDF').name, 'awa');
+  });
+
+  test('production : simulateur et clés manquantes refusés', () => {
+    const saved = { ...process.env };
+    Object.assign(process.env, { JWT_SECRET: 'a', OTP_SECRET: 'b', AWA_PUBLIC_ID: 'p', AWA_MERCHANT_ID: 'm', AWA_SECRET_KEY: 's', WA_APP_SECRET: 'w', WA_VERIFY_TOKEN: 'v', WA_PHONE_NUMBER_ID: '1', WA_ACCESS_TOKEN: 't', AWA_SIMULATOR: '1' });
+    assert.throws(() => loadConfig({ nodeEnv: 'production', isProd: true }), /SIMULATOR/);
+    delete process.env.AWA_SECRET_KEY;
+    process.env.AWA_SIMULATOR = '0';
+    assert.throws(() => loadConfig({ nodeEnv: 'production', isProd: true }), /AWA_SECRET_KEY/);
+    process.env = saved;
+  });
+
+  test('AWA : réseau coupé ⇒ paiement « en attente », jamais « échoué »', async () => {
+    const awa = createAwaClient({ baseUrl: 'x', publicId: 'P', merchantId: 'M', secretKey: 'k' }, { fetchImpl: async () => { throw new Error('ECONNRESET'); }, logger: { warn() {} } });
+    const r = await awa.debit({ amount: 1000, currency: 'CDF', phone: '243812345678', method: 'orange', reference: 'IKC-9' });
+    assert.equal(r.accepted, true);
+    assert.equal(r.finalStatus, 'pending');
   });
 });
 
@@ -103,10 +169,10 @@ describe('parcours complet d\'une tontine', () => {
     assert.equal(r.status, 201, JSON.stringify(r.body));
     assert.equal(r.body.status, 'pending');
     assert.equal(r.body.method, 'airtel');
-    const tx = t.moko.txs.get(r.body.reference);
+    const tx = t.psp.txs.get(r.body.reference);
     assert.equal(tx.action, 'debit');
     assert.equal(tx.amount, 50);
-    assert.equal(tx.callbackUrl, 'https://api.test/webhooks/moko');
+    assert.equal(tx.callbackUrl, 'https://api.test/webhooks/awa');
 
     // un double appui ne crée pas un second paiement
     const again = await t.agent.post(`/v1/groups/${groupId}/contributions`).set(b.auth).send({ phone: '0971234567' });
@@ -138,20 +204,27 @@ describe('parcours complet d\'une tontine', () => {
     assert.equal(g.body.currentCycle.paidCount, 2);
   });
 
-  test('versement de la cagnotte au bénéficiaire puis tour suivant', async () => {
-    const no = await t.agent.post(`/v1/groups/${groupId}/cycles/1/payout`).set(b.auth);
+  test('versement : demande, règlement, validation par la finance, tour suivant', async () => {
+    const no = await t.agent.post(`/v1/groups/${groupId}/cycles/1/payout-request`).set(b.auth);
     assert.equal(no.status, 403);
-    const r = await t.agent.post(`/v1/groups/${groupId}/cycles/1/payout`).set(a.auth);
+    const r = await t.agent.post(`/v1/groups/${groupId}/cycles/1/payout-request`).set(a.auth);
     assert.equal(r.status, 201);
-    const tx = t.moko.txs.get(r.body.reference);
+    const fin = await t.login('0899999999', 'Finance Ikobi'); // admin via PLATFORM_ADMIN_PHONES
+    const refs = (await t.db('contributions').where({ status: 'success' })).map((x) => x.reference);
+    const st = await t.agent.post('/v1/ops/settlements').set(fin.auth).send({ provider: 'awa', currency: 'USD', references: refs, statementTotal: 100 });
+    assert.equal(st.status, 200, JSON.stringify(st.body));
+    const ok = await t.agent.post(`/v1/ops/payout-requests/${r.body.id}/review`).set(fin.auth).send({ decision: 'approve' });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    const tx = t.psp.txs.get(ok.body.reference);
     assert.equal(tx.action, 'credit');
     assert.equal(tx.amount, 100);
     assert.equal(tx.phone, '243812345678');
-    await t.callback(r.body.reference, 'Success');
+    await t.callback(ok.body.reference, 'Success');
     const g = await t.agent.get(`/v1/groups/${groupId}`).set(a.auth);
     assert.equal(g.body.currentCycle.number, 2);
     assert.equal(g.body.currentCycle.beneficiaryId, b.user.id);
     assert.equal(g.body.cycles[0].status, 'closed');
+    assert.equal(g.body.me.payoutReceived, 100);
     const h = await t.agent.get(`/v1/groups/${groupId}/history`).set(c.auth);
     assert.equal(h.body.contributions.length, 2);
     assert.equal(h.body.payouts[0].status, 'success');

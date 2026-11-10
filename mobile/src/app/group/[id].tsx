@@ -72,25 +72,32 @@ export default function Group() {
     }
   }
 
-  async function payout() {
-    Alert.alert('Verser la cagnotte ?', `${money(g!.pot, g!.currency)} seront envoyés à ${beneficiary?.name ?? 'le bénéficiaire'} par Mobile Money.`, [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Verser',
-        onPress: async () => {
-          setBusy('payout');
-          try {
-            await api(`/groups/${id}/cycles/${c!.number}/payout`, { method: 'POST' });
-            await load();
-          } catch (e) {
-            Alert.alert('Versement impossible', e instanceof ApiError ? e.message : 'Erreur');
-          } finally {
-            setBusy(null);
-          }
+  async function requestPayout() {
+    Alert.alert(
+      'Demander le versement ?',
+      `${money(g!.pot, g!.currency)} pour ${beneficiary?.name ?? 'le bénéficiaire'}. L’équipe Ikobi vérifie que les fonds sont bien réglés avant d’envoyer l’argent.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Demander',
+          onPress: async () => {
+            setBusy('payout');
+            try {
+              await api(`/groups/${id}/cycles/${c!.number}/payout-request`, { method: 'POST' });
+              await load();
+            } catch (e) {
+              Alert.alert('Demande impossible', e instanceof ApiError ? e.message : 'Erreur');
+            } finally {
+              setBusy(null);
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   }
+
+  const req = c?.payoutRequest;
+  const canRequest = isAdmin && c?.status === 'ready' && (!req || req.status === 'rejected' || req.status === 'failed');
 
   return (
     <Screen
@@ -161,14 +168,46 @@ export default function Group() {
           )}
           {c.iHavePaid && <Pill text="Tu as payé ce tour ✓" tone="green" />}
           {c.iAmBeneficiary && <Pill text="C’est ton tour de recevoir 🎁" tone="green" />}
-          {isAdmin && c.status === 'ready' && <Button title={`Verser ${money(g.pot, g.currency)} à ${beneficiary?.name}`} onPress={payout} loading={busy === 'payout'} />}
-          {c.status === 'ready' && !isAdmin && <Muted>Tout le monde a payé : l’organisateur va verser la cagnotte.</Muted>}
+
+          <View style={s.fin}>
+            <Amount label="Prévu" value={money(c.scheduled, g.currency)} />
+            <Amount label="Collecté" value={money(c.collected, g.currency)} />
+            <Amount label="Réglé" value={money(c.settled, g.currency)} />
+            <Amount label="Versé" value={money(c.paid, g.currency)} />
+          </View>
+          {c.pendingPayments > 0 ? <Muted style={{ fontSize: 13 }}>{c.pendingPayments} paiement(s) en attente de confirmation de l’opérateur</Muted> : null}
+
+          {c.status === 'ready' && req?.status === 'requested' && <Pill text="Versement en attente de validation Ikobi" tone="gold" />}
+          {c.status === 'paying_out' && <Pill text="Versement en cours d’envoi…" tone="gold" />}
+          {req?.status === 'rejected' && <ErrorBox message={`Versement refusé${req.note ? ` : ${req.note}` : ''}`} />}
+          {req?.status === 'failed' && <ErrorBox message="Le dernier versement a échoué chez l’opérateur. Une nouvelle demande est possible." />}
+          {canRequest && <Button title={`Demander le versement (${money(g.pot, g.currency)})`} onPress={requestPayout} loading={busy === 'payout'} />}
+          {c.status === 'ready' && !isAdmin && !req && <Muted>Toutes les cotisations sont collectées : l’organisateur va demander le versement.</Muted>}
         </Card>
       )}
 
       {WA_BOT && c?.status === 'open' && !c.iAmBeneficiary && !c.iHavePaid ? (
         <Button title="Cotiser sur WhatsApp" variant="whatsapp" onPress={() => Linking.openURL(`https://wa.me/${WA_BOT}?text=cotiser`)} />
       ) : null}
+
+      {g.status !== 'forming' && (
+        <Card>
+          <H2>Ma participation</H2>
+          <Row label="Total cotisé" value={money(g.me.totalPaid, g.currency)} />
+          <Row label="Mon tour de recevoir" value={g.me.position ? `Tour ${g.me.position}/${g.totalCycles}` : '—'} />
+          <Row label="Date prévue" value={g.me.expectedPayoutDate ? dateFr(g.me.expectedPayoutDate) : '—'} />
+          {g.me.payoutReceived !== null ? <Row label="Cagnotte reçue" value={money(g.me.payoutReceived, g.currency)} /> : null}
+          <Muted style={{ fontSize: 12 }}>La date de versement dépend de la collecte complète des cotisations du tour.</Muted>
+        </Card>
+      )}
+
+      <Card>
+        <H2>Règles</H2>
+        <Muted>• {money(g.amount, g.currency)} par membre, {FREQ[g.frequency].toLowerCase()}.</Muted>
+        <Muted>• Le bénéficiaire du tour ne cotise pas ; il reçoit {money(g.amount, g.currency)} × (membres − 1).</Muted>
+        <Muted>• Le versement est envoyé quand toutes les cotisations du tour sont collectées et réglées, après validation par Ikobi.</Muted>
+        <Muted>• Un membre peut payer en retard ou ne pas payer : la tontine repose sur la confiance entre membres.</Muted>
+      </Card>
 
       <Card>
         <H2>Membres</H2>
@@ -226,7 +265,26 @@ export default function Group() {
   );
 }
 
+function Amount({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ width: '50%', paddingVertical: 6 }}>
+      <Muted style={{ fontSize: 12 }}>{label}</Muted>
+      <Text style={{ color: C.text, fontSize: 16, fontWeight: '700' }}>{value}</Text>
+    </View>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 }}>
+      <Muted>{label}</Muted>
+      <Text style={{ color: C.text, fontSize: 15, fontWeight: '600' }}>{value}</Text>
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
+  fin: { flexDirection: 'row', flexWrap: 'wrap', backgroundColor: C.surface2, borderRadius: 12, paddingHorizontal: S.md, paddingVertical: S.sm },
   pot: { color: C.gold, fontSize: 40, fontWeight: '900', letterSpacing: -1 },
   code: { color: C.text, fontSize: 34, fontWeight: '900', letterSpacing: 8, textAlign: 'center', paddingVertical: S.sm },
   member: { flexDirection: 'row', alignItems: 'center', gap: S.md, paddingVertical: S.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },

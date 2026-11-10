@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
-import { api, ApiError, type Contribution, type GroupDetail } from '@/lib/api';
+import { api, ApiError, type Contribution, type GroupDetail, type Quote } from '@/lib/api';
 import { detectOperator, displayPhone, money, normalizePhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { AcceptedOperators, OPERATOR_INFO, OperatorBadge } from '@/operators';
@@ -21,6 +21,7 @@ export default function Pay() {
   const [contribution, setContribution] = useState<Contribution | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [quote, setQuote] = useState<Quote | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -42,6 +43,18 @@ export default function Pay() {
       if (timer.current) clearInterval(timer.current);
     };
   }, [id]);
+
+  // Devis : principal + frais = total, affiché AVANT la confirmation.
+  useEffect(() => {
+    if (!method) return;
+    let alive = true;
+    api<Quote>(`/groups/${id}/contributions/quote?method=${method}`)
+      .then((q) => alive && setQuote(q))
+      .catch(() => alive && setQuote(null));
+    return () => {
+      alive = false;
+    };
+  }, [id, method]);
 
   useEffect(() => {
     if (phase !== 'waiting' || !contribution) return;
@@ -91,7 +104,7 @@ export default function Pay() {
           <ActivityIndicator size="large" color={C.gold} />
           <H1 style={{ textAlign: 'center' }}>Valide sur ton téléphone</H1>
           <Muted style={{ textAlign: 'center' }}>
-            Une demande de {money(g.amount, g.currency)} a été envoyée sur ton {OPERATORS[contribution?.method ?? '']?.label ?? 'Mobile Money'}. Saisis ton code PIN dans la fenêtre de ton opérateur.
+            Une demande de {money(contribution?.total ?? g.amount, g.currency)} a été envoyée sur ton {OPERATORS[contribution?.method ?? '']?.label ?? 'Mobile Money'}. Saisis ton code PIN dans la fenêtre de ton opérateur.
           </Muted>
         </View>
         <Card>
@@ -112,6 +125,7 @@ export default function Pay() {
           <Muted style={{ textAlign: 'center' }}>
             {money(g.amount, g.currency)} pour « {g.name} ». Merci !
           </Muted>
+          {contribution && contribution.fee > 0 ? <Muted style={{ fontSize: 13 }}>Total débité : {money(contribution.total, g.currency)} (dont {money(contribution.fee, g.currency)} de frais)</Muted> : null}
           <Muted style={{ fontSize: 12 }}>Réf. {contribution?.reference}</Muted>
         </View>
         <Button title="Terminé" onPress={() => router.back()} />
@@ -160,10 +174,30 @@ export default function Pay() {
         <Choice key={k} selected={method === k} onPress={() => setMethod(k)} title={o.label} subtitle={o.tagline} left={<OperatorBadge id={k} />} />
       ))}
 
+      <Card>
+        <H2>Récapitulatif</H2>
+        <Row label="Cotisation" value={money(quote?.principal ?? g.amount, g.currency)} />
+        <Row label="Frais de traitement" value={quote ? money(quote.fee, g.currency) : '—'} />
+        <View style={{ height: 1, backgroundColor: C.border }} />
+        <Row label="Total à payer" value={quote ? money(quote.total, g.currency) : '—'} strong />
+        <Muted style={{ fontSize: 12 }}>
+          Ta cotisation est comptée dès que l’opérateur confirme le paiement. Un paiement refusé ou annulé n’est pas débité.
+        </Muted>
+      </Card>
+
       <ErrorBox message={error} />
-      <Button title={`Payer ${money(g.amount, g.currency)}`} onPress={submit} loading={loading} />
-      <Muted style={{ textAlign: 'center', fontSize: 13 }}>Paiement sécurisé par MOKO Afrika. Des frais d’opérateur peuvent s’appliquer.</Muted>
+      <Button title={quote ? `Payer ${money(quote.total, g.currency)}` : 'Payer'} onPress={submit} loading={loading} disabled={!quote} />
+      <Muted style={{ textAlign: 'center', fontSize: 13 }}>Paiement traité par AWA Network. Ikobi ne te demandera jamais ton code PIN.</Muted>
     </Screen>
+  );
+}
+
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      <Text style={{ color: strong ? C.text : C.muted, fontSize: strong ? 17 : 15, fontWeight: strong ? '800' : '400' }}>{label}</Text>
+      <Text style={{ color: C.text, fontSize: strong ? 17 : 15, fontWeight: strong ? '800' : '600' }}>{value}</Text>
+    </View>
   );
 }
 

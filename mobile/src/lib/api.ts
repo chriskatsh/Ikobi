@@ -45,7 +45,9 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
 }
 
 // --- Types renvoyés par l'API
-export type User = { id: number; phone: string; name: string };
+export type User = { id: number; phone: string; name: string; platformRole?: string | null; kycStatus?: string };
+
+export type Quote = { currency: string; principal: number; fee: number; total: number; provider: string | null; methods: string[] };
 
 export type GroupSummary = {
   id: number;
@@ -92,7 +94,14 @@ export type GroupDetail = {
     iAmBeneficiary: boolean;
     iHavePaid: boolean;
     myPendingContributionId: number | null;
+    scheduled: number;
+    collected: number;
+    settled: number;
+    paid: number;
+    pendingPayments: number;
+    payoutRequest: null | { id: number; status: 'requested' | 'approved' | 'rejected' | 'executed' | 'failed'; note: string | null };
   };
+  me: { totalPaid: number; position: number | null; expectedPayoutDate: string | null; payoutReceived: number | null };
   cycles: { number: number; dueDate: string; beneficiaryId: number; status: string }[];
   totalCycles: number;
 };
@@ -101,9 +110,12 @@ export type Contribution = {
   id: number;
   status: 'pending' | 'success' | 'failed';
   amount: number;
+  fee: number;
+  total: number;
   currency: string;
   method: string;
   reference: string;
+  settlement: 'unsettled' | 'settled';
   failureReason: string | null;
 };
 

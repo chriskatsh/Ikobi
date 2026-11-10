@@ -30,8 +30,8 @@ function reference(prefix) {
 
 const PENDING_DEDUP_MS = 3 * 60 * 1000;
 
-export function createTontineService({ db, moko, notifier, config, logger = console }) {
-  const callbackUrl = `${config.publicUrl}/webhooks/moko`;
+export function createTontineService({ db, payments, ledger, fees, audit, notifier, config, logger = console }) {
+  const callbackUrl = (provider) => `${config.publicUrl}/webhooks/${provider}`;
 
   async function membership(groupId, userId) {
     return db('memberships').where({ group_id: groupId, user_id: userId }).first();
@@ -64,6 +64,10 @@ export function createTontineService({ db, moko, notifier, config, logger = cons
   }
 
   async function createGroup(userId, input) {
+    const country = input.country || 'CD';
+    if (!payments.supportedCurrencies(country).includes(input.currency)) {
+      throw badRequest('currency_unavailable', `Devise ${input.currency} indisponible pour le moment. Devises acceptées : ${payments.supportedCurrencies(country).join(', ') || 'aucune'}`);
+    }
     const payoutPhone = normalizePhone(input.payoutPhone);
     if (!payoutPhone) throw badRequest('invalid_phone', 'Numéro Mobile Money invalide');
     const payoutMethod = input.payoutMethod || detectMethod(payoutPhone);
@@ -176,6 +180,13 @@ export function createTontineService({ db, moko, notifier, config, logger = cons
     const paid = cycle ? await paidUserIds(cycle.id) : new Set();
     const n = members.length;
 
+    const fin = cycle ? await cycleFinancials(cycle, group, n) : null;
+    const req = cycle ? await db('payout_requests').where({ cycle_id: cycle.id }).orderBy('id', 'desc').first() : null;
+    const myTotal = await db('contributions as c').join('cycles as cy', 'cy.id', 'c.cycle_id')
+      .where({ 'cy.group_id': groupId, 'c.user_id': userId, 'c.status': 'success' }).sum({ s: 'c.amount_minor' }).first();
+    const myCycle = cycles.find((c) => c.beneficiary_id === userId);
+    const myPayout = myCycle ? await db('payouts').where({ cycle_id: myCycle.id, status: 'success' }).first() : null;
+
     let myPending = null;
     if (cycle) {
       myPending = await db('contributions')
@@ -215,8 +226,20 @@ export function createTontineService({ db, moko, notifier, config, logger = cons
             iAmBeneficiary: cycle.beneficiary_id === userId,
             iHavePaid: paid.has(userId),
             myPendingContributionId: myPending?.id ?? null,
+            scheduled: fromMinor(fin.scheduledMinor),
+            collected: fromMinor(fin.collectedMinor),
+            settled: fromMinor(fin.settledMinor),
+            paid: fromMinor(fin.paidMinor),
+            pendingPayments: fin.pendingCount,
+            payoutRequest: req ? { id: req.id, status: req.status, note: req.review_note } : null,
           }
         : null,
+      me: {
+        totalPaid: fromMinor(Number(myTotal?.s || 0)),
+        position: myCycle?.number ?? null,
+        expectedPayoutDate: myCycle?.due_date ?? null,
+        payoutReceived: myPayout ? fromMinor(Number(myPayout.amount_minor) - Number(myPayout.fee_minor)) : null,
+      },
       cycles: cycles.map((c) => ({ number: c.number, dueDate: c.due_date, beneficiaryId: c.beneficiary_id, status: c.status })),
       totalCycles: cycles.length,
     };
@@ -277,6 +300,27 @@ export function createTontineService({ db, moko, notifier, config, logger = cons
     return out;
   }
 
+  // ---------------------------------------------------------------------------
+  // Cotisations
+  // ---------------------------------------------------------------------------
+
+  async function quoteContribution(userId, groupId, method) {
+    const { group } = await requireMember(groupId, userId);
+    const m = METHODS[method] ? method : null;
+    const provider = m ? payments.route(group.country, m, group.currency).name : null;
+    const q = await fees.quoteContribution({
+      principalMinor: Number(group.amount_minor), currency: group.currency, country: group.country, provider, method: m,
+    });
+    return {
+      currency: group.currency,
+      principal: fromMinor(q.principalMinor),
+      fee: fromMinor(q.feeMinor),
+      total: fromMinor(q.totalMinor),
+      provider,
+      methods: payments.supportedMethods(group.country),
+    };
+  }
+
   async function initiateContribution(userId, groupId, { phone, method, channel = 'app' }) {
     const { group } = await requireMember(groupId, userId);
     if (group.status !== 'active') throw conflict('not_active', "La tontine n'a pas encore démarré");
@@ -288,6 +332,7 @@ export function createTontineService({ db, moko, notifier, config, logger = cons
     if (!payPhone) throw badRequest('invalid_phone', 'Numéro Mobile Money invalide');
     const payMethod = method || detectMethod(payPhone);
     if (!METHODS[payMethod]) throw badRequest('invalid_method', 'Opérateur Mobile Money inconnu');
+    const { name: providerName, client: provider } = payments.route(group.country, payMethod, group.currency);
 
     const existing = await db('contributions').where({ cycle_id: cycle.id, user_id: userId }).whereIn('status', ['success', 'pending']).orderBy('id', 'desc');
     if (existing.some((c) => c.status === 'success')) throw conflict('already_paid', 'Tu as déjà payé ce tour');
@@ -295,64 +340,91 @@ export function createTontineService({ db, moko, notifier, config, logger = cons
     if (pending) {
       const age = Date.now() - toMs(pending.created_at);
       if (age < PENDING_DEDUP_MS) return { contribution: pending, reused: true };
-      // Paiement ancien resté en attente : on vérifie chez MOKO avant d'en relancer un.
-      const v = await moko.verify(pending.reference);
+      // Paiement ancien resté en attente : on vérifie chez le fournisseur avant d'en relancer un.
+      const v = await payments.get(pending.provider).verify(pending.reference);
       if (v.status !== 'pending') {
-        await applyContributionResult(pending.reference, v.status, v.providerTxId, v.description);
+        await applyContributionResult(pending.reference, v.status, v.providerTxId, v.description, 'verify');
         if (v.status === 'success') throw conflict('already_paid', 'Tu as déjà payé ce tour');
       } else {
-        await db('contributions').where({ id: pending.id }).update({ status: 'failed', failure_reason: 'Expiré sans confirmation', updated_at: db.fn.now() });
+        // On ne marque PAS « échoué » un paiement peut-être débité : on bloque et on laisse la réconciliation trancher.
+        throw conflict('payment_unconfirmed', 'Ton paiement précédent est toujours en attente de confirmation. Réessaie dans quelques minutes.');
       }
     }
 
+    const quote = await fees.quoteContribution({
+      principalMinor: Number(group.amount_minor), currency: group.currency, country: group.country, provider: providerName, method: payMethod,
+    });
     const user = await db('users').where({ id: userId }).first();
     const ref = reference('IKC');
     const id = await insertId(db('contributions').insert({
       cycle_id: cycle.id,
       user_id: userId,
-      amount_minor: group.amount_minor,
+      amount_minor: quote.principalMinor,
+      fee_minor: quote.feeMinor,
       currency: group.currency,
       method: payMethod,
+      provider: providerName,
       phone: payPhone,
       channel,
       reference: ref,
     }, ['id']));
+    await audit.log({ actorId: userId, action: 'contribution.initiated', entity: 'contribution', entityId: ref, data: { groupId, cycle: cycle.number, principal: quote.principalMinor, fee: quote.feeMinor, method: payMethod, channel } });
 
     const [firstname, ...rest] = (user.name || 'Membre Ikobi').split(' ');
-    const r = await moko.debit({
-      amount: fromMinor(Number(group.amount_minor)),
+    const r = await provider.debit({
+      amount: fromMinor(quote.totalMinor),
       currency: group.currency,
       phone: payPhone,
       method: payMethod,
       reference: ref,
       firstname,
       lastname: rest.join(' ') || 'Ikobi',
-      callbackUrl,
+      callbackUrl: callbackUrl(providerName),
     });
     if (!r.accepted) {
       await db('contributions').where({ id }).update({ status: 'failed', failure_reason: r.error, updated_at: db.fn.now() });
-      throw badRequest('payment_refused', r.error || 'Paiement refusé par l\'opérateur');
+      await audit.log({ actorType: 'provider', action: 'contribution.refused', entity: 'contribution', entityId: ref, data: { code: r.errorCode } });
+      throw badRequest('payment_refused', r.error || "Paiement refusé par l'opérateur");
     }
     await db('contributions').where({ id }).update({ provider_tx_id: r.providerTxId, updated_at: db.fn.now() });
-    if (r.finalStatus && r.finalStatus !== 'pending') await applyContributionResult(ref, r.finalStatus, r.providerTxId);
+    if (r.finalStatus && r.finalStatus !== 'pending') await applyContributionResult(ref, r.finalStatus, r.providerTxId, null, 'initiate');
     return { contribution: await db('contributions').where({ id }).first(), reused: false };
   }
 
-  // Idempotent : appliqué par le callback MOKO, la vérification manuelle ou le polling.
-  async function applyContributionResult(ref, status, providerTxId, reason) {
+  // Idempotent : appliqué par le callback, la vérification ou le polling.
+  // Succès = « collecté » chez le fournisseur (pas encore réglé sur le compte marchand).
+  async function applyContributionResult(ref, status, providerTxId, reason, source = 'callback') {
     if (status === 'pending') return null;
     const c = await db('contributions').where({ reference: ref }).first();
     if (!c || c.status !== 'pending') return c || null;
 
-    const changed = await db('contributions')
-      .where({ id: c.id, status: 'pending' })
-      .update({
-        status,
-        provider_tx_id: providerTxId || c.provider_tx_id,
-        failure_reason: status === 'failed' ? String(reason || 'Paiement refusé ou annulé').slice(0, 200) : null,
-        updated_at: db.fn.now(),
-      });
-    if (!changed) return c; // traité en parallèle
+    const applied = await db.transaction(async (trx) => {
+      const changed = await trx('contributions')
+        .where({ id: c.id, status: 'pending' })
+        .update({
+          status,
+          provider_tx_id: providerTxId || c.provider_tx_id,
+          failure_reason: status === 'failed' ? String(reason || 'Paiement refusé ou annulé').slice(0, 200) : null,
+          updated_at: trx.fn.now(),
+        });
+      if (!changed) return false;
+      if (status === 'success') {
+        const cycle = await trx('cycles').where({ id: c.cycle_id }).first();
+        const total = Number(c.amount_minor) + Number(c.fee_minor);
+        await ledger.post({
+          kind: 'contribution_collected', refType: 'contribution', refId: c.reference, currency: c.currency,
+          memo: `Cotisation tour ${cycle.number}`,
+          lines: [
+            { account: `clearing:${c.provider}`, debit: total },
+            { account: `pool:${cycle.group_id}`, credit: Number(c.amount_minor) },
+            ...(Number(c.fee_minor) > 0 ? [{ account: 'revenue:fees', credit: Number(c.fee_minor) }] : []),
+          ],
+        }, trx);
+      }
+      await audit.log({ actorType: 'provider', action: `contribution.${status}`, entity: 'contribution', entityId: ref, data: { source, providerTxId } }, trx);
+      return true;
+    });
+    if (!applied) return c;
 
     const cycle = await db('cycles').where({ id: c.cycle_id }).first();
     const group = await db('groups').where({ id: cycle.group_id }).first();
@@ -389,100 +461,196 @@ export function createTontineService({ db, moko, notifier, config, logger = cons
     if (!moved) return;
     const group = await db('groups').where({ id: cycle.group_id }).first();
     const pot = formatMoney(potMinor(group, n), group.currency);
-
     await notifier.user(cycle.beneficiary_id, {
-      title: '🎉 La cagnotte est complète',
-      body: `Tous les membres de « ${group.name} » ont cotisé : ${pot} pour toi.`,
+      title: 'Toutes les cotisations sont collectées',
+      body: `« ${group.name} » : ${pot} collectés pour toi. Le versement suit sa validation.`,
       data: { groupId: group.id },
-      whatsappText: `🎉 Tous les membres de *${group.name}* ont cotisé. La cagnotte de *${pot}* est pour toi !`,
+      whatsappText: `📥 Tous les membres de *${group.name}* ont cotisé (${pot}). Le versement te sera envoyé après validation.`,
     });
-    if (config.payoutMode === 'auto') {
-      await initiatePayout(null, group.id, cycle.number).catch((e) => logger.error?.({ err: e.message }, 'Versement auto échoué'));
-    } else {
-      const admins = await db('memberships').where({ group_id: group.id, role: 'admin' });
-      for (const a of admins) {
-        await notifier.user(a.user_id, {
-          title: group.name,
-          body: `Tour ${cycle.number} complet : verse ${pot} au bénéficiaire.`,
-          data: { groupId: group.id },
-        });
-      }
+    const admins = await db('memberships').where({ group_id: group.id, role: 'admin' });
+    for (const a of admins) {
+      await notifier.user(a.user_id, { title: group.name, body: `Tour ${cycle.number} complet : demande le versement de ${pot}.`, data: { groupId: group.id } });
     }
   }
 
-  async function initiatePayout(adminId, groupId, cycleNumber) {
-    const group = await db('groups').where({ id: groupId }).first();
-    if (!group) throw notFound('Groupe introuvable');
-    if (adminId !== null) {
-      const m = await membership(groupId, adminId);
-      if (!m || m.role !== 'admin') throw forbidden("Seul l'administrateur peut déclencher le versement");
-    }
+  // ---------------------------------------------------------------------------
+  // Versements : demande (organisateur) → approbation (équipe Ikobi) → exécution
+  // ---------------------------------------------------------------------------
+
+  async function cycleFinancials(cycle, group, n) {
+    const rows = await db('contributions').where({ cycle_id: cycle.id, status: 'success' });
+    const byUser = new Map(rows.filter((r) => r.user_id !== cycle.beneficiary_id).map((r) => [r.user_id, r]));
+    const collected = [...byUser.values()];
+    const settled = collected.filter((r) => r.settlement_status === 'settled');
+    const payout = await db('payouts').where({ cycle_id: cycle.id, status: 'success' }).first();
+    return {
+      scheduledMinor: Number(group.amount_minor) * Math.max(n - 1, 0),
+      collectedMinor: collected.reduce((s, r) => s + Number(r.amount_minor), 0),
+      settledMinor: settled.reduce((s, r) => s + Number(r.amount_minor), 0),
+      paidMinor: payout ? Number(payout.amount_minor) : 0,
+      collectedCount: collected.length,
+      settledCount: settled.length,
+      pendingCount: await db('contributions').where({ cycle_id: cycle.id, status: 'pending' }).count({ c: '*' }).first().then((r) => Number(r.c)),
+    };
+  }
+
+  async function payoutPreconditions(cycle, group) {
+    const n = await memberCount(group.id);
+    const f = await cycleFinancials(cycle, group, n);
+    const gross = potMinor(group, n);
+    const reasons = [];
+    if (f.collectedCount < n - 1) reasons.push(`Cotisations collectées : ${f.collectedCount}/${n - 1}`);
+    if (config.requireSettlement && f.settledCount < n - 1) reasons.push(`Cotisations réglées sur le compte marchand : ${f.settledCount}/${n - 1}`);
+    const pool = -(await ledger.balance(`pool:${group.id}`, group.currency)); // passif : solde créditeur
+    if (pool < gross) reasons.push(`Solde de la tontine au grand livre insuffisant (${fromMinor(pool)} < ${fromMinor(gross)})`);
+    return { ok: reasons.length === 0, reasons, grossMinor: gross, financials: f };
+  }
+
+  async function requestPayout(userId, groupId, cycleNumber) {
+    const { group, member } = await requireMember(groupId, userId);
+    if (member.role !== 'admin') throw forbidden("Seul l'organisateur peut demander le versement");
     const cycle = await db('cycles').where({ group_id: groupId, number: cycleNumber }).first();
     if (!cycle) throw notFound('Tour introuvable');
-    if (cycle.status !== 'ready') throw conflict('cycle_not_ready', 'Toutes les cotisations ne sont pas encore reçues');
+    if (cycle.status !== 'ready') throw conflict('cycle_not_ready', 'Toutes les cotisations ne sont pas encore collectées');
+    const active = await db('payout_requests').where({ cycle_id: cycle.id }).whereIn('status', ['requested', 'approved', 'executed']).first();
+    if (active) throw conflict('payout_already_requested', 'Un versement est déjà demandé pour ce tour');
+    const id = await insertId(db('payout_requests').insert({ cycle_id: cycle.id, requested_by: userId }, ['id']));
+    await audit.log({ actorId: userId, action: 'payout.requested', entity: 'payout_request', entityId: id, data: { groupId, cycle: cycleNumber } });
+    const reviewers = await db('users').whereIn('platform_role', ['finance', 'admin']);
+    for (const r of reviewers) {
+      await notifier.user(r.id, { title: 'Versement à valider', body: `« ${group.name} », tour ${cycleNumber}.`, data: { payoutRequestId: id } });
+    }
+    return db('payout_requests').where({ id }).first();
+  }
 
+  async function reviewPayout(reviewerId, requestId, { decision, note }) {
+    const reviewer = await db('users').where({ id: reviewerId }).first();
+    if (!['finance', 'admin'].includes(reviewer?.platform_role)) throw forbidden('Réservé à l’équipe finance Ikobi');
+    const req = await db('payout_requests').where({ id: requestId }).first();
+    if (!req) throw notFound('Demande introuvable');
+    if (req.status !== 'requested') throw conflict('already_reviewed', 'Demande déjà traitée');
+    const cycle = await db('cycles').where({ id: req.cycle_id }).first();
+    // Séparation des tâches : on ne valide ni sa propre demande, ni un versement dont on est bénéficiaire.
+    if (req.requested_by === reviewerId) throw forbidden('Tu ne peux pas valider ta propre demande');
+    if (cycle.beneficiary_id === reviewerId) throw forbidden('Tu ne peux pas valider un versement dont tu es bénéficiaire');
+    const group = await db('groups').where({ id: cycle.group_id }).first();
+
+    if (decision === 'reject') {
+      const ok = await db('payout_requests').where({ id: requestId, status: 'requested' }).update({ status: 'rejected', reviewed_by: reviewerId, review_note: (note || '').slice(0, 200), updated_at: db.fn.now() });
+      if (!ok) throw conflict('already_reviewed', 'Demande déjà traitée');
+      await audit.log({ actorId: reviewerId, action: 'payout.rejected', entity: 'payout_request', entityId: requestId, data: { note } });
+      return db('payout_requests').where({ id: requestId }).first();
+    }
+
+    const pre = await payoutPreconditions(cycle, group);
+    if (!pre.ok) {
+      await audit.log({ actorId: reviewerId, action: 'payout.blocked', entity: 'payout_request', entityId: requestId, data: { reasons: pre.reasons } });
+      throw conflict('payout_preconditions', `Versement impossible : ${pre.reasons.join(' · ')}`);
+    }
+    const ok = await db('payout_requests').where({ id: requestId, status: 'requested' }).update({ status: 'approved', reviewed_by: reviewerId, review_note: (note || '').slice(0, 200), updated_at: db.fn.now() });
+    if (!ok) throw conflict('already_reviewed', 'Demande déjà traitée');
+    await audit.log({ actorId: reviewerId, action: 'payout.approved', entity: 'payout_request', entityId: requestId });
+    return executePayout(req, cycle, group, pre.grossMinor, reviewerId);
+  }
+
+  async function executePayout(req, cycle, group, grossMinor, actorId) {
+    // Verrou : un seul passage ready → paying_out, donc jamais deux versements pour un tour.
     const locked = await db('cycles').where({ id: cycle.id, status: 'ready' }).update({ status: 'paying_out', updated_at: db.fn.now() });
     if (!locked) throw conflict('payout_in_progress', 'Versement déjà en cours');
 
-    const n = await memberCount(groupId);
-    const amountMinor = potMinor(group, n);
-    const bm = await membership(groupId, cycle.beneficiary_id);
+    const bm = await membership(group.id, cycle.beneficiary_id);
     const ben = await db('users').where({ id: cycle.beneficiary_id }).first();
+    let providerName;
+    let provider;
+    try {
+      ({ name: providerName, client: provider } = payments.route(group.country, bm.payout_method, group.currency));
+    } catch (e) {
+      await db('cycles').where({ id: cycle.id }).update({ status: 'ready', updated_at: db.fn.now() });
+      throw e;
+    }
+    const q = await fees.quotePayout({ grossMinor, currency: group.currency, country: group.country, provider: providerName, method: bm.payout_method });
     const ref = reference('IKP');
     await db('payouts').insert({
-      cycle_id: cycle.id, user_id: ben.id, amount_minor: amountMinor, currency: group.currency,
-      method: bm.payout_method, phone: bm.payout_phone, reference: ref,
+      cycle_id: cycle.id, user_id: ben.id, amount_minor: grossMinor, fee_minor: q.feeMinor, currency: group.currency,
+      method: bm.payout_method, provider: providerName, phone: bm.payout_phone, reference: ref, request_id: req.id,
     });
+    await audit.log({ actorId, action: 'payout.executing', entity: 'payout', entityId: ref, data: { gross: grossMinor, fee: q.feeMinor, net: q.netMinor } });
     const [firstname, ...rest] = (ben.name || 'Membre Ikobi').split(' ');
-    const r = await moko.credit({
-      amount: fromMinor(amountMinor), currency: group.currency, phone: bm.payout_phone, method: bm.payout_method,
-      reference: ref, firstname, lastname: rest.join(' ') || 'Ikobi', callbackUrl,
+    const r = await provider.credit({
+      amount: fromMinor(q.netMinor), currency: group.currency, phone: bm.payout_phone, method: bm.payout_method,
+      reference: ref, firstname, lastname: rest.join(' ') || 'Ikobi', callbackUrl: callbackUrl(providerName),
     });
     if (!r.accepted) {
       await db('payouts').where({ reference: ref }).update({ status: 'failed', failure_reason: r.error, updated_at: db.fn.now() });
+      await db('payout_requests').where({ id: req.id }).update({ status: 'failed', updated_at: db.fn.now() });
       await db('cycles').where({ id: cycle.id }).update({ status: 'ready', updated_at: db.fn.now() });
+      await audit.log({ actorType: 'provider', action: 'payout.refused', entity: 'payout', entityId: ref, data: { code: r.errorCode } });
       throw badRequest('payout_refused', r.error || 'Versement refusé');
     }
     await db('payouts').where({ reference: ref }).update({ provider_tx_id: r.providerTxId, updated_at: db.fn.now() });
+    if (r.confirmationRequired) {
+      // AWA demande une confirmation supplémentaire (procédure non publiée) : on n'improvise pas,
+      // le versement reste en attente et l'équipe finance est alertée.
+      await audit.log({ actorType: 'provider', action: 'payout.confirmation_required', entity: 'payout', entityId: ref });
+      const team = await db('users').whereIn('platform_role', ['finance', 'admin']);
+      for (const u of team) await notifier.user(u.id, { title: 'Versement à confirmer chez AWA', body: `Référence ${ref}`, data: { payout: ref } });
+    }
     if (r.finalStatus && r.finalStatus !== 'pending') await applyPayoutResult(ref, r.finalStatus, r.providerTxId);
     return db('payouts').where({ reference: ref }).first();
   }
 
-  async function applyPayoutResult(ref, status, providerTxId, reason) {
+  async function applyPayoutResult(ref, status, providerTxId, reason, source = 'callback') {
     if (status === 'pending') return null;
     const p = await db('payouts').where({ reference: ref }).first();
     if (!p || p.status !== 'pending') return p || null;
-    const changed = await db('payouts').where({ id: p.id, status: 'pending' }).update({
-      status, provider_tx_id: providerTxId || p.provider_tx_id,
-      failure_reason: status === 'failed' ? String(reason || 'Versement échoué').slice(0, 200) : null,
-      updated_at: db.fn.now(),
-    });
-    if (!changed) return p;
     const cycle = await db('cycles').where({ id: p.cycle_id }).first();
     const group = await db('groups').where({ id: cycle.group_id }).first();
-    const amount = formatMoney(Number(p.amount_minor), p.currency);
 
+    const applied = await db.transaction(async (trx) => {
+      const changed = await trx('payouts').where({ id: p.id, status: 'pending' }).update({
+        status, provider_tx_id: providerTxId || p.provider_tx_id,
+        failure_reason: status === 'failed' ? String(reason || 'Versement échoué').slice(0, 200) : null,
+        updated_at: trx.fn.now(),
+      });
+      if (!changed) return false;
+      if (status === 'failed') {
+        await trx('cycles').where({ id: cycle.id }).update({ status: 'ready', updated_at: trx.fn.now() });
+        if (p.request_id) await trx('payout_requests').where({ id: p.request_id }).update({ status: 'failed', updated_at: trx.fn.now() });
+      } else {
+        const gross = Number(p.amount_minor);
+        const fee = Number(p.fee_minor);
+        await ledger.post({
+          kind: 'payout', refType: 'payout', refId: p.reference, currency: p.currency, memo: `Versement tour ${cycle.number}`,
+          lines: [
+            { account: `pool:${group.id}`, debit: gross },
+            { account: `cash:${p.provider}`, credit: gross - fee },
+            ...(fee > 0 ? [{ account: 'revenue:fees', credit: fee }] : []),
+          ],
+        }, trx);
+        if (p.request_id) await trx('payout_requests').where({ id: p.request_id }).update({ status: 'executed', updated_at: trx.fn.now() });
+        await trx('cycles').where({ id: cycle.id }).update({ status: 'closed', updated_at: trx.fn.now() });
+        const next = await trx('cycles').where({ group_id: group.id, number: cycle.number + 1 }).first();
+        if (next) await trx('cycles').where({ id: next.id }).update({ status: 'open', updated_at: trx.fn.now() });
+        else await trx('groups').where({ id: group.id }).update({ status: 'completed', updated_at: trx.fn.now() });
+      }
+      await audit.log({ actorType: 'provider', action: `payout.${status}`, entity: 'payout', entityId: ref, data: { source, providerTxId } }, trx);
+      return true;
+    });
+    if (!applied) return p;
+
+    const net = formatMoney(Number(p.amount_minor) - Number(p.fee_minor), p.currency);
     if (status === 'failed') {
-      await db('cycles').where({ id: cycle.id }).update({ status: 'ready', updated_at: db.fn.now() });
       const admins = await db('memberships').where({ group_id: group.id, role: 'admin' });
       for (const a of admins) {
-        await notifier.user(a.user_id, { title: group.name, body: `Le versement de ${amount} a échoué. Réessaie depuis l'app.`, data: { groupId: group.id } });
+        await notifier.user(a.user_id, { title: group.name, body: `Le versement de ${net} a échoué. Une nouvelle demande est nécessaire.`, data: { groupId: group.id } });
       }
-      return p;
+      return db('payouts').where({ id: p.id }).first();
     }
-
-    await db.transaction(async (trx) => {
-      await trx('cycles').where({ id: cycle.id }).update({ status: 'closed', updated_at: trx.fn.now() });
-      const next = await trx('cycles').where({ group_id: group.id, number: cycle.number + 1 }).first();
-      if (next) await trx('cycles').where({ id: next.id }).update({ status: 'open', updated_at: trx.fn.now() });
-      else await trx('groups').where({ id: group.id }).update({ status: 'completed', updated_at: trx.fn.now() });
-    });
-
     await notifier.user(p.user_id, {
       title: '💰 Cagnotte versée',
-      body: `${amount} ont été envoyés sur ton Mobile Money (« ${group.name} »).`,
+      body: `${net} ont été envoyés sur ton Mobile Money (« ${group.name} »).`,
       data: { groupId: group.id },
-      whatsappText: `💰 *${amount}* ont été envoyés sur ton Mobile Money pour *${group.name}*. Félicitations !`,
+      whatsappText: `💰 *${net}* ont été envoyés sur ton Mobile Money pour *${group.name}*.`,
     });
     const members = await db('memberships').where({ group_id: group.id });
     const next = await db('cycles').where({ group_id: group.id, status: 'open' }).first();
@@ -490,37 +658,110 @@ export function createTontineService({ db, moko, notifier, config, logger = cons
       if (m.user_id === p.user_id) continue;
       await notifier.user(m.user_id, {
         title: group.name,
-        body: next
-          ? `Tour ${cycle.number} terminé. Prochaine échéance : ${formatDateFr(next.due_date)}.`
-          : 'La tontine est terminée. Bravo à tous !',
+        body: next ? `Tour ${cycle.number} terminé. Prochaine échéance : ${formatDateFr(next.due_date)}.` : 'La tontine est terminée.',
         data: { groupId: group.id },
       });
     }
     return db('payouts').where({ id: p.id }).first();
   }
 
-  // Résultat MOKO quel que soit le type (cotisation ou versement).
-  async function applyProviderResult(ref, status, providerTxId, reason) {
-    if (String(ref).startsWith('IKP-')) return applyPayoutResult(ref, status, providerTxId, reason);
-    return applyContributionResult(ref, status, providerTxId, reason);
+  async function applyProviderResult(ref, status, providerTxId, reason, source) {
+    if (String(ref).startsWith('IKP-')) return applyPayoutResult(ref, status, providerTxId, reason, source);
+    return applyContributionResult(ref, status, providerTxId, reason, source);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Règlement et réconciliation (équipe finance)
+  // ---------------------------------------------------------------------------
+
+  // Marque comme « réglées » des cotisations figurant sur un relevé du fournisseur.
+  // Le total du relevé doit correspondre exactement au total encaissé, sinon rien n'est modifié.
+  async function settle(actorId, { provider, references, statementTotal, currency, statementRef }) {
+    const actor = await db('users').where({ id: actorId }).first();
+    if (!['finance', 'admin'].includes(actor?.platform_role)) throw forbidden('Réservé à l’équipe finance Ikobi');
+    const refs = [...new Set(references)].sort();
+    const rows = await db('contributions').whereIn('reference', refs);
+    const problems = [];
+    if (rows.length !== refs.length) problems.push(`${refs.length - rows.length} référence(s) inconnue(s)`);
+    for (const r of rows) {
+      if (r.status !== 'success') problems.push(`${r.reference} n'est pas collectée`);
+      if (r.settlement_status === 'settled') problems.push(`${r.reference} déjà réglée`);
+      if (r.provider !== provider) problems.push(`${r.reference} : autre fournisseur`);
+      if (r.currency !== currency) problems.push(`${r.reference} : autre devise`);
+    }
+    const expected = rows.reduce((s, r) => s + Number(r.amount_minor) + Number(r.fee_minor), 0);
+    const declared = Math.round(Number(statementTotal) * 100);
+    if (expected !== declared) problems.push(`Écart : relevé ${fromMinor(declared)} ≠ encaissé ${fromMinor(expected)}`);
+    if (problems.length) {
+      await audit.log({ actorId, action: 'settlement.discrepancy', entity: 'settlement', entityId: statementRef || 'n/a', data: { provider, currency, problems } });
+      throw conflict('settlement_mismatch', problems.join(' · '));
+    }
+    const journalRef = statementRef || crypto.createHash('sha256').update(refs.join(',')).digest('hex').slice(0, 40);
+    await db.transaction(async (trx) => {
+      await trx('contributions').whereIn('reference', refs).andWhere({ settlement_status: 'unsettled' }).update({ settlement_status: 'settled', settled_at: trx.fn.now() });
+      await ledger.post({
+        kind: 'settlement', refType: 'statement', refId: journalRef, currency, memo: `Règlement ${provider} (${refs.length} opérations)`,
+        lines: [{ account: `cash:${provider}`, debit: expected }, { account: `clearing:${provider}`, credit: expected }],
+      }, trx);
+      await audit.log({ actorId, action: 'settlement.recorded', entity: 'settlement', entityId: journalRef, data: { provider, currency, count: refs.length, total: expected } }, trx);
+    });
+    return { settled: refs.length, total: fromMinor(expected), currency };
+  }
+
+  async function reconciliation() {
+    const tb = await ledger.trialBalance();
+    const unsettled = await db('contributions').where({ status: 'success', settlement_status: 'unsettled' })
+      .select('provider', 'currency').count({ n: '*' }).sum({ principal: 'amount_minor' }).sum({ fee: 'fee_minor' }).groupBy('provider', 'currency');
+    const stale = await db('contributions').where({ status: 'pending' }).andWhere('created_at', '<', new Date(Date.now() - 30 * 60 * 1000))
+      .select('reference', 'provider', 'amount_minor', 'currency', 'created_at').limit(200);
+    const pendingPayouts = await db('payout_requests').where({ status: 'requested' }).count({ n: '*' }).first();
+    const failedPayouts = await db('payouts').where({ status: 'failed' }).count({ n: '*' }).first();
+    return {
+      ledgerBalanced: tb.balanced,
+      accounts: tb.accounts.map((a) => ({ ...a, debit: fromMinor(a.debit), credit: fromMinor(a.credit), balance: fromMinor(a.balance) })),
+      unsettled: unsettled.map((u) => ({ provider: u.provider, currency: u.currency, count: Number(u.n), total: fromMinor(Number(u.principal) + Number(u.fee)) })),
+      stalePending: stale.map((s) => ({ reference: s.reference, provider: s.provider, amount: fromMinor(Number(s.amount_minor)), currency: s.currency, createdAt: s.created_at })),
+      payoutRequestsAwaiting: Number(pendingPayouts.n),
+      failedPayouts: Number(failedPayouts.n),
+    };
+  }
+
+  async function payoutQueue() {
+    const rows = await db('payout_requests as r')
+      .join('cycles as c', 'c.id', 'r.cycle_id')
+      .join('groups as g', 'g.id', 'c.group_id')
+      .join('users as u', 'u.id', 'c.beneficiary_id')
+      .where('r.status', 'requested')
+      .select('r.id', 'r.created_at', 'r.requested_by', 'c.number', 'c.id as cycle_id', 'g.id as group_id', 'g.name', 'g.currency', 'u.name as beneficiary');
+    const out = [];
+    for (const r of rows) {
+      const cycle = await db('cycles').where({ id: r.cycle_id }).first();
+      const group = await db('groups').where({ id: r.group_id }).first();
+      const pre = await payoutPreconditions(cycle, group);
+      out.push({ id: r.id, group: r.name, cycle: r.number, beneficiary: r.beneficiary, gross: fromMinor(pre.grossMinor), currency: r.currency, ready: pre.ok, blockers: pre.reasons, requestedAt: r.created_at });
+    }
+    return out;
   }
 
   async function contributionStatus(userId, contributionId) {
     const c = await db('contributions').where({ id: contributionId, user_id: userId }).first();
     if (!c) throw notFound('Paiement introuvable');
-    // Rattrapage si le callback tarde : on interroge MOKO après 20 s.
+    // Rattrapage si le callback tarde : on interroge le fournisseur après 20 s.
     if (c.status === 'pending' && Date.now() - toMs(c.created_at) > 20000) {
-      const v = await moko.verify(c.reference).catch(() => ({ status: 'pending' }));
-      if (v.status !== 'pending') await applyContributionResult(c.reference, v.status, v.providerTxId, v.description);
+      const v = await payments.get(c.provider).verify(c.reference).catch(() => ({ status: 'pending' }));
+      if (v.status !== 'pending') await applyContributionResult(c.reference, v.status, v.providerTxId, v.description, 'poll');
     }
     const fresh = await db('contributions').where({ id: contributionId }).first();
     return {
       id: fresh.id,
       status: fresh.status,
       amount: fromMinor(Number(fresh.amount_minor)),
+      fee: fromMinor(Number(fresh.fee_minor)),
+      total: fromMinor(Number(fresh.amount_minor) + Number(fresh.fee_minor)),
       currency: fresh.currency,
       method: fresh.method,
       reference: fresh.reference,
+      settlement: fresh.settlement_status,
       failureReason: fresh.failure_reason,
     };
   }
@@ -549,7 +790,8 @@ export function createTontineService({ db, moko, notifier, config, logger = cons
 
   return {
     createGroup, joinGroup, startGroup, groupDetail, myGroups, duesForUser,
-    initiateContribution, applyContributionResult, applyPayoutResult, applyProviderResult,
-    initiatePayout, contributionStatus, history, currentCycle, memberCount, paidUserIds, potMinor,
+    quoteContribution, initiateContribution, applyContributionResult, applyPayoutResult, applyProviderResult,
+    requestPayout, reviewPayout, payoutPreconditions, settle, reconciliation, payoutQueue,
+    contributionStatus, history, currentCycle, memberCount, paidUserIds, potMinor,
   };
 }

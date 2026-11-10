@@ -2,11 +2,11 @@
 
 *Together. Securely.*
 
-Ikobi organise des tontines à tour de rôle entre personnes de confiance : membres, calendrier des tours, cotisations par Mobile Money (M-Pesa, Orange Money, Airtel Money, Afrimoney via **MOKO Afrika**) et chatbot **WhatsApp** pour cotiser directement dans le chat.
+Ikobi organise des tontines à tour de rôle entre personnes de confiance : membres, calendrier des tours, cotisations par Mobile Money (M-Pesa, Orange Money, Airtel Money, Afrimoney via **AWA Network**, en CDF) et chatbot **WhatsApp** pour cotiser directement dans le chat.
 
 ```
 ikobi/
-├── api/      API Node.js (Express + MySQL) — tontines, paiements MOKO, bot WhatsApp, rappels
+├── api/      API Node.js (Express + MySQL) — tontines, paiements AWA Network, grand livre, bot WhatsApp, rappels
 └── mobile/   App native iOS + Android (Expo / React Native)
 ```
 
@@ -16,7 +16,8 @@ ikobi/
 - Les membres rejoignent dans l’app ou sur WhatsApp (`rejoindre CODE`). Chacun indique le numéro Mobile Money où recevoir sa cagnotte.
 - Au démarrage, un tour est créé par membre (ordre d’arrivée ou tirage au sort).
 - À chaque tour, **tous les membres sauf le bénéficiaire** cotisent. Cagnotte = montant × (membres − 1).
-- Quand tout le monde a payé, l’organisateur verse la cagnotte en un geste (ou automatiquement avec `PAYOUT_MODE=auto`). Le tour suivant s’ouvre.
+- Quand tout le monde a payé, l’organisateur **demande** le versement ; l’équipe finance Ikobi le **valide** après rapprochement du relevé AWA. Le tour suivant s’ouvre.
+- Documentation V3 : `docs/IKOBI_*.md` (audit, feuille de route, architecture, sécurité, flux de paiement, design, tests, changements).
 - Rappels automatiques 2 jours avant, le jour J et 2 jours après l’échéance (push + WhatsApp).
 
 ## Chatbot WhatsApp
@@ -42,18 +43,18 @@ Le code PIN n’est **jamais** demandé dans le chat : l’opérateur l’affich
 4. **Déploiement** depuis ce dépôt GitHub : racine `api/`, point d’entrée `src/main.js`, Node 22. Les tables se créent au premier démarrage.
 5. Vérifier : `https://api.ikobi.app/v1/health` → `{"ok":true}`.
 
-> Sans identifiants MOKO, l’API tourne en **mode simulation** (aucun argent réel) — pratique pour tester. En production, elle refuse de démarrer si une clé manque.
+> Sans identifiants AWA, l’API tourne en **mode simulation** en développement uniquement (aucun argent réel) — pratique pour tester. En production, elle refuse de démarrer si une clé manque.
 
-## 2. MOKO Afrika
+## 2. AWA Network
 
-Demander à MOKO (support@mokoafrika.com) :
-- `merchant_id` et `merchant_secret` (production) ;
-- la **clé AES** et la **clé HMAC** des callbacks, et confirmer si l’IV = la clé ;
-- l’enregistrement de l’URL de callback : `https://api.ikobi.app/webhooks/moko` ;
-- l’activation des **dépôts (C2B)** et des **versements (B2C)** sur les 4 opérateurs, en USD et CDF ;
-- les frais par opérateur.
+Demander à AWA :
+- `public_id`, `merchant_id` et `secretKey` (production) → `AWA_PUBLIC_ID`, `AWA_MERCHANT_ID`, `AWA_SECRET_KEY` ;
+- l'URL de callback à enregistrer : `https://api.ikobi.app/webhooks/awa` ;
+- la procédure « Confirmation Types » des versements B2C, la liste des codes d'erreur et le format des relevés de règlement ;
+- la confirmation des identifiants opérateurs (Orange 2013, Airtel 2014, Africell 2015, Vodacom 2071) ;
+- les frais par opérateur et la disponibilité éventuelle de l'USD.
 
-Chaque succès reçu par callback est **revérifié** auprès de MOKO (`action=verify`) avant d’être crédité.
+Chaque succès reçu par callback est vérifié (signature, marchand, montant) puis **reconfirmé** via `/status` avant d'être crédité.
 
 ## 3. WhatsApp — le numéro devient « Ikobi »
 
@@ -93,7 +94,7 @@ npx eas-cli@latest submit --platform android  # vers Google Play (piste interne)
 ## Développement
 
 ```bash
-# API (tests : 23 scénarios, base SQLite en mémoire, faux MOKO et faux WhatsApp)
+# API (tests : 38 scénarios, base SQLite en mémoire, faux fournisseur et faux WhatsApp)
 cd api && npm install && npm test
 DB_CLIENT=better-sqlite3 npm start        # http://localhost:3000, mode simulation
 
@@ -105,4 +106,4 @@ npm run typecheck && npm run lint
 
 ## Point juridique
 
-Faire valider par un juriste (et au besoin auprès de la BCC) le modèle de collecte : avec les versements automatiques, les fonds transitent quelques heures par le compte marchand MOKO d’Ikobi. Le texte de `mobile/src/app/legal.tsx` est une base à faire relire.
+Faire valider par un juriste (et au besoin auprès de la BCC) le modèle de collecte : les fonds transitent par le compte marchand AWA d’Ikobi entre la collecte et le versement. Le texte de `mobile/src/app/legal.tsx` est une base à faire relire.
