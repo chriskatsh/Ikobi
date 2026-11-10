@@ -59,6 +59,29 @@ export function apiRoutes({ auth, tontine, db, config }) {
     res.json(publicUser(await db('users').where({ id: req.user.id }).first()));
   }));
 
+  // Suppression du compte depuis l'app (exigée par l'App Store et Google Play).
+  // Bloquée tant que le membre est engagé dans une tontine en cours (de l'argent est dû ou à recevoir).
+  r.delete('/me', needAuth, ah(async (req, res) => {
+    const uid = req.user.id;
+    const active = await db('memberships as m').join('groups as g', 'g.id', 'm.group_id').where('m.user_id', uid).andWhere('g.status', 'active').first();
+    if (active) {
+      return res.status(409).json({ error: { code: 'active_tontine', message: 'Tu fais partie d’une tontine en cours. Tu pourras supprimer ton compte quand elle sera terminée.' } });
+    }
+    await db.transaction(async (trx) => {
+      const forming = await trx('memberships as m').join('groups as g', 'g.id', 'm.group_id').where('m.user_id', uid).andWhere('g.status', 'forming').select('g.id', 'm.role');
+      for (const f of forming) {
+        const others = await trx('memberships').where({ group_id: f.id }).whereNot({ user_id: uid }).orderBy('position');
+        await trx('memberships').where({ group_id: f.id, user_id: uid }).del();
+        if (!others.length) await trx('groups').where({ id: f.id }).del();
+        else if (f.role === 'admin') await trx('memberships').where({ id: others[0].id }).update({ role: 'admin' });
+      }
+      await trx('otp_codes').where({ phone: req.user.phone }).del();
+      await trx('wa_sessions').where({ phone: req.user.phone }).del();
+      await trx('users').where({ id: uid }).update({ phone: `del-${uid}`, name: 'Compte supprimé', push_token: null, wa_last_inbound_at: null });
+    });
+    res.status(204).end();
+  }));
+
   // --- Tontines
   r.get('/groups', needAuth, ah(async (req, res) => res.json(await tontine.myGroups(req.user.id))));
 

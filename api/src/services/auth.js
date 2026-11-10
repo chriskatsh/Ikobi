@@ -66,7 +66,7 @@ export function createAuthService({ db, whatsapp, config }) {
           throw unauthorized('Session expirée. Reconnecte-toi.');
         }
         const user = await db('users').where({ id: payload.sub }).first();
-        if (!user) throw unauthorized();
+        if (!user || String(user.phone).startsWith('del-')) throw unauthorized();
         req.user = user;
         next();
       } catch (e) {

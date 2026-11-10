@@ -163,6 +163,16 @@ describe('parcours complet d\'une tontine', () => {
     assert.equal(r.status, 403);
   });
 
+  test('suppression du compte : bloquée pendant une tontine, possible sinon', async () => {
+    const blocked = await t.agent.delete('/v1/me').set(b.auth);
+    assert.equal(blocked.status, 409);
+    const x = await t.login('0822222222', 'Libre');
+    const ok = await t.agent.delete('/v1/me').set(x.auth);
+    assert.equal(ok.status, 204);
+    const after = await t.agent.get('/v1/me').set(x.auth);
+    assert.equal(after.status, 401);
+  });
+
   test('sans jeton : 401', async () => {
     const r = await t.agent.get('/v1/groups');
     assert.equal(r.status, 401);
