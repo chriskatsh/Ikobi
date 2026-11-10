@@ -6,6 +6,7 @@ Ikobi organise des tontines à tour de rôle entre personnes de confiance : memb
 
 ```
 ikobi/
+├── site/     Site public ikobi.app (source + build.mjs → site/dist) et portail api.ikobi.app (→ api/public)
 ├── api/      API Node.js (Express + MySQL) — tontines, paiements AWA Network, grand livre, bot WhatsApp, rappels
 └── mobile/   App native iOS + Android (Expo / React Native)
 ```
@@ -103,6 +104,13 @@ cd mobile && npm install
 EXPO_PUBLIC_API_URL=http://<ip-locale>:3000 npx expo start
 npm run typecheck && npm run lint
 ```
+
+## Sites web
+
+- `node site/build.mjs` régénère le site public (`site/dist`) et le portail développeurs (`api/public`).
+- **ikobi.app** est publié depuis la branche `site-live` (contenu de `site/dist`) : après un build, `git subtree split --prefix site/dist -b site-live` puis pousser `site-live` ; Hostinger redéploie automatiquement.
+- **api.ikobi.app** sert le portail (accueil, `/docs`, `/cle-api`, `/statut`, `/openapi.json`) et l'API (`/v1`, `/partner/v1`, `/webhooks`).
+- Demandes de clé : `GET /v1/ops/api-key-requests`, puis `POST /v1/ops/api-key-requests/:id/approve` (admin) — la clé n'est affichée qu'une fois.
 
 ## Point juridique
 
