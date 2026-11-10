@@ -5,7 +5,8 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { api, ApiError, type Contribution, type GroupDetail } from '@/lib/api';
 import { detectOperator, displayPhone, money, normalizePhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Button, Card, Choice, ErrorBox, Field, H1, H2, Label, Loading, Muted, OperatorDot, Screen } from '@/ui';
+import { AcceptedOperators, OPERATOR_INFO, OperatorBadge } from '@/operators';
+import { Button, Card, Choice, ErrorBox, Field, H1, H2, Label, Loading, Muted, Screen } from '@/ui';
 import { C, OPERATORS, S } from '@/theme';
 
 type Phase = 'form' | 'waiting' | 'success' | 'failed';
@@ -138,6 +139,8 @@ export default function Pay() {
       <Card style={{ alignItems: 'center' }}>
         <Label>{g.name}{c ? ` · tour ${c.number}` : ''}</Label>
         <Text style={{ color: C.gold, fontSize: 40, fontWeight: '900' }}>{money(g.amount, g.currency)}</Text>
+        <Muted style={{ fontSize: 13, marginTop: S.sm }}>Moyens de paiement acceptés</Muted>
+        <AcceptedOperators />
       </Card>
 
       <Field
@@ -153,8 +156,8 @@ export default function Pay() {
       />
 
       <H2>Opérateur</H2>
-      {Object.entries(OPERATORS).map(([k, o]) => (
-        <Choice key={k} selected={method === k} onPress={() => setMethod(k)} title={o.label} left={<OperatorDot id={k} />} />
+      {Object.entries(OPERATOR_INFO).map(([k, o]) => (
+        <Choice key={k} selected={method === k} onPress={() => setMethod(k)} title={o.label} subtitle={o.tagline} left={<OperatorBadge id={k} />} />
       ))}
 
       <ErrorBox message={error} />

@@ -223,13 +223,3 @@ export const st = StyleSheet.create({
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.faint, alignItems: 'center', justifyContent: 'center' },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.gold },
 });
-
-export function OperatorDot({ id }: { id: string }) {
-  const colors: Record<string, string> = { mpesa: '#E60000', orange: '#FF7900', airtel: '#ED1C24', africell: '#7B2CBF' };
-  const letters: Record<string, string> = { mpesa: 'M', orange: 'O', airtel: 'A', africell: 'Af' };
-  return (
-    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors[id] ?? C.surface2, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{letters[id] ?? '?'}</Text>
-    </View>
-  );
-}

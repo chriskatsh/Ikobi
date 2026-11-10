@@ -4,7 +4,8 @@ import { View } from 'react-native';
 import { api, ApiError, type GroupDetail } from '@/lib/api';
 import { detectOperator, FREQ, money, normalizePhone, todayIso } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Button, Choice, ErrorBox, Field, Label, Muted, OperatorDot, Screen } from '@/ui';
+import { OperatorBadge } from '@/operators';
+import { Button, Choice, ErrorBox, Field, Label, Muted, Screen } from '@/ui';
 import { OPERATORS, S } from '@/theme';
 
 export default function Create() {
@@ -72,7 +73,7 @@ export default function Create() {
       />
       {op ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: S.sm }}>
-          <OperatorDot id={op} />
+          <OperatorBadge id={op} size={36} />
           <Muted>{OPERATORS[op].label}</Muted>
         </View>
       ) : null}

@@ -1,3 +1,4 @@
+import express from 'express';
 import pino from 'pino';
 import { loadConfig } from './config.js';
 import { createDb } from './db.js';
@@ -8,8 +9,24 @@ import { createWhatsAppClient } from './services/whatsapp.js';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
+// Si des variables obligatoires manquent en production, l'API démarre quand même
+// mais répond 503 en listant les NOMS des variables à ajouter (jamais leurs valeurs).
+function startSetupMode(message) {
+  const app = express();
+  const missing = message.replace(/^.*: /, '').split(', ');
+  app.use((_req, res) => res.status(503).json({ ok: false, status: 'configuration_incomplete', missing }));
+  const port = Number(process.env.PORT || 3000);
+  app.listen(port, () => logger.error({ missing }, 'Configuration incomplète : API en attente des variables'));
+}
+
 async function main() {
-  const config = loadConfig();
+  let config;
+  try {
+    config = loadConfig();
+  } catch (e) {
+    if (String(e.message).startsWith("Variables d'environnement manquantes")) return startSetupMode(e.message);
+    throw e;
+  }
   config.appStoreUrl = process.env.APP_STORE_URL || '';
   config.playStoreUrl = process.env.PLAY_STORE_URL || '';
 

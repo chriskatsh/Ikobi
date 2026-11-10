@@ -71,6 +71,9 @@ export function loadConfig(overrides = {}) {
     if (!cfg.moko.merchantId) missing.push('MOKO_MERCHANT_ID');
     if (!cfg.moko.merchantSecret) missing.push('MOKO_MERCHANT_SECRET');
     if (!cfg.moko.hmacKey) missing.push('MOKO_HMAC_KEY');
+    if (!cfg.moko.aesKey) missing.push('MOKO_AES_KEY');
+    if (!cfg.whatsapp.phoneNumberId) missing.push('WA_PHONE_NUMBER_ID');
+    if (!cfg.whatsapp.accessToken) missing.push('WA_ACCESS_TOKEN');
     if (!cfg.whatsapp.appSecret) missing.push('WA_APP_SECRET');
     if (!cfg.whatsapp.verifyToken) missing.push('WA_VERIFY_TOKEN');
     if (missing.length) throw new Error(`Variables d'environnement manquantes : ${missing.join(', ')}`);

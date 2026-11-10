@@ -55,12 +55,17 @@ Demander à MOKO (support@mokoafrika.com) :
 
 Chaque succès reçu par callback est **revérifié** auprès de MOKO (`action=verify`) avant d’être crédité.
 
-## 3. WhatsApp (réutilise l’app Meta d’Awakazi)
+## 3. WhatsApp — le numéro devient « Ikobi »
 
-1. Meta Business → WhatsApp → ajouter un **numéro dédié Ikobi** (ou réutiliser celui d’Awakazi).
-2. Webhook : URL `https://api.ikobi.app/webhooks/whatsapp`, jeton = `WA_VERIFY_TOKEN`, abonnement au champ `messages`.
-3. Jeton d’**utilisateur système** permanent → `WA_ACCESS_TOKEN` ; secret de l’app → `WA_APP_SECRET`.
-4. Faire approuver 2 modèles (langue `fr`) :
+Le numéro WhatsApp Business utilisé jusqu’ici pour Awakazi passe aux coordonnées d’Ikobi.
+
+1. **Nom affiché** : Meta Business Manager → WhatsApp Manager → Numéros → Modifier le nom → `Ikobi` (validation de Meta, en général 1 à 3 jours).
+2. **Photo de profil** : `docs/whatsapp-profil-ikobi.png`.
+3. **Description, e-mail, site, adresse** : une fois les variables `WA_*` en place sur Hostinger, lancer `npm run wa:profile` dans `api/` (ou recopier le texte de `api/scripts/wa-profile.js` dans WhatsApp Manager).
+4. **Webhook** : app Meta → WhatsApp → Configuration → URL `https://api.ikobi.app/webhooks/whatsapp`, jeton = `WA_VERIFY_TOKEN`, champ `messages`.
+   ⚠️ Un numéro n’a qu’un seul webhook : à partir de ce moment, les messages vont au bot Ikobi et plus au bot Awakazi.
+5. Jeton d’**utilisateur système** permanent → `WA_ACCESS_TOKEN` ; secret de l’app → `WA_APP_SECRET` ; identifiant du numéro → `WA_PHONE_NUMBER_ID`.
+6. Faire approuver 2 modèles (langue `fr`) :
    - `ikobi_code` — catégorie **Authentification** (bouton « Copier le code »).
    - `ikobi_rappel` — catégorie **Utilitaire** :
      `Bonjour {{1}}, ta cotisation de {{2}} pour {{3}} est attendue {{4}}. Réponds *cotiser* pour payer.`
@@ -81,6 +86,7 @@ npx eas-cli@latest submit --platform android  # vers Google Play (piste interne)
 
 - Identifiants : `app.ikobi` (iOS et Android).
 - Pour tester avant les stores : `--profile preview` produit un APK Android installable directement.
+- Logos officiels des opérateurs : déposer les PNG dans `mobile/assets/operators/` et les activer dans `mobile/src/operators.tsx` (sinon, badges aux couleurs des opérateurs).
 - Variable `EXPO_PUBLIC_WHATSAPP_NUMBER` (ex. `243XXXXXXXXX`) dans `eas.json` pour afficher les boutons WhatsApp.
 - Fiches store à préparer : captures d’écran, politique de confidentialité en ligne (ex. `https://ikobi.app/politiques`), compte de démonstration pour les testeurs Apple/Google.
 
