@@ -4,7 +4,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { api, ApiError, type Contribution, type GroupDetail, type Quote } from '@/lib/api';
-import { detectOperator, money } from '@/lib/format';
+import { detectOperator, money, pct } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { OPERATOR_INFO, OperatorBadge } from '@/operators';
 import { ActionBar, Button, Card, ErrorBox, ErrorState, KV, Muted, PhoneInput, Screen, SkeletonCard } from '@/ui';
@@ -153,7 +153,7 @@ export default function Pay() {
 
   // --- Reçu
   if (phase === 'success' && contribution) {
-    const receipt = `Reçu iKobi\n${g.name} · tour ${g.currentCycle?.number ?? ''}\nCotisation : ${money(contribution.amount, g.currency)}\nFrais : ${money(contribution.fee, g.currency)}\nTotal payé : ${money(contribution.total, g.currency)}\nOpérateur : ${op?.label ?? contribution.method}\nRéférence : ${contribution.reference}`;
+    const receipt = `Reçu iKobi\n${g.name} · tour ${g.currentCycle?.number ?? ''}\nCotisation : ${money(contribution.amount, g.currency)}\nFrais de paiement : ${money(contribution.processingFee, g.currency)}${contribution.serviceFee > 0 ? `\nFrais de service iKobi : ${money(contribution.serviceFee, g.currency)}` : ''}\nTotal payé : ${money(contribution.total, g.currency)}\nOpérateur : ${op?.label ?? contribution.method}\nRéférence : ${contribution.reference}`;
     return (
       <Screen footer={<ActionBar><Button title="Terminé" onPress={() => router.back()} /><Button title="Partager le reçu" variant="secondary" onPress={() => Share.share({ message: receipt })} /></ActionBar>}>
         <Stack.Screen options={{ title: '', headerBackVisible: false }} />
@@ -165,7 +165,8 @@ export default function Pay() {
         <Card style={{ gap: 2 }}>
           <KV label="Tontine" value={g.name} />
           <KV label="Cotisation" value={money(contribution.amount, g.currency)} />
-          <KV label="Frais" value={money(contribution.fee, g.currency)} />
+          <KV label="Frais de paiement" value={money(contribution.processingFee, g.currency)} />
+          {contribution.serviceFee > 0 ? <KV label="Frais de service iKobi" value={money(contribution.serviceFee, g.currency)} /> : null}
           <View style={s.sep} />
           <KV label="Total payé" value={money(contribution.total, g.currency)} strong />
           <View style={s.sep} />
@@ -197,7 +198,7 @@ export default function Pay() {
   return (
     <Screen
       footer={
-        <ActionBar note={quote && quote.fee > 0 ? `Dont ${money(quote.fee, g.currency)} de frais de traitement` : undefined}>
+        <ActionBar note={quote && quote.fee > 0 ? `Dont ${money(quote.fee, g.currency)} de frais de paiement` : undefined}>
           <Button title={quote ? `Payer ${money(quote.total, g.currency)}` : 'Payer'} onPress={submit} loading={loading} disabled={!quote || phone.length !== 9} />
         </ActionBar>
       }>
@@ -233,7 +234,8 @@ export default function Pay() {
 
       <Card style={{ gap: 2 }}>
         <KV label="Cotisation" value={money(quote?.principal ?? g.amount, g.currency)} />
-        <KV label="Frais de traitement" value={quote ? money(quote.fee, g.currency) : '…'} />
+        <KV label={quote ? `Frais de paiement (${pct(quote.rates.processing)})` : 'Frais de paiement'} value={quote ? money(quote.processingFee, g.currency) : '…'} />
+        {quote && quote.serviceFee > 0 ? <KV label={`Frais de service iKobi (${pct(quote.rates.service)})`} value={money(quote.serviceFee, g.currency)} /> : null}
         <View style={s.sep} />
         <KV label="Total à payer" value={quote ? money(quote.total, g.currency) : '…'} strong />
         <Muted style={{ fontSize: 12, marginTop: 6 }}>Votre cotisation est comptée dès que l’opérateur confirme. Un paiement refusé ou annulé n’est pas débité.</Muted>

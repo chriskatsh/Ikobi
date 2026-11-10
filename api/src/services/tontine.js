@@ -59,6 +59,24 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
     return new Set(rows.map((r) => r.user_id));
   }
 
+  // Estimation de ce que le bénéficiaire recevra réellement (frais de service et de retrait déduits).
+  async function payoutEstimate(group, grossMinor, method) {
+    let provider = '*';
+    try {
+      provider = payments.route(group.country, method, group.currency).name;
+    } catch {
+      // opérateur non routé : règles génériques
+    }
+    const q = await fees.quotePayout({ grossMinor, currency: group.currency, country: group.country, provider, method });
+    return {
+      gross: fromMinor(q.grossMinor),
+      serviceFee: fromMinor(q.serviceFeeMinor),
+      processingFee: fromMinor(q.processingFeeMinor),
+      net: fromMinor(q.netMinor),
+      rates: { service: q.rates.serviceBp / 100, processing: q.rates.processingBp / 100 },
+    };
+  }
+
   function potMinor(group, members) {
     return Number(group.amount_minor) * Math.max(members - 1, 0);
   }
@@ -115,6 +133,7 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
       members: n,
       maxMembers: g.max_members,
       potWhenFull: fromMinor(Number(g.amount_minor) * (g.max_members - 1)),
+      payoutFees: await payoutEstimate(g, Number(g.amount_minor) * (g.max_members - 1), 'mpesa'),
       organizer: (organizer?.name || 'Organisateur').split(' ')[0],
       status: g.status,
       canJoin: !already && g.status === 'forming' && n < g.max_members,
@@ -209,6 +228,9 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
     const myTotal = await db('contributions as c').join('cycles as cy', 'cy.id', 'c.cycle_id')
       .where({ 'cy.group_id': groupId, 'c.user_id': userId, 'c.status': 'success' }).sum({ s: 'c.amount_minor' }).first();
     const myCycle = cycles.find((c) => c.beneficiary_id === userId);
+    const benMember = cycle ? await membership(groupId, cycle.beneficiary_id) : member;
+    const grossForEstimate = group.status === 'forming' ? Number(group.amount_minor) * (group.max_members - 1) : potMinor(group, n);
+    const payoutFees = await payoutEstimate(group, grossForEstimate, benMember?.payout_method || member.payout_method);
     const myPayout = myCycle ? await db('payouts').where({ cycle_id: myCycle.id, status: 'success' }).first() : null;
 
     let myPending = null;
@@ -231,6 +253,7 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
       inviteCode: group.invite_code,
       myRole: member.role,
       pot: fromMinor(potMinor(group, n)),
+      payoutFees,
       members: members.map((m) => ({
         id: m.id,
         name: m.name || 'Membre',
@@ -338,8 +361,11 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
     return {
       currency: group.currency,
       principal: fromMinor(q.principalMinor),
+      processingFee: fromMinor(q.processingFeeMinor),
+      serviceFee: fromMinor(q.serviceFeeMinor),
       fee: fromMinor(q.feeMinor),
       total: fromMinor(q.totalMinor),
+      rates: { processing: q.rates.processingBp / 100, service: q.rates.serviceBp / 100 },
       provider,
       methods: payments.supportedMethods(group.country),
     };
@@ -385,6 +411,7 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
       user_id: userId,
       amount_minor: quote.principalMinor,
       fee_minor: quote.feeMinor,
+      service_fee_minor: quote.serviceFeeMinor,
       currency: group.currency,
       method: payMethod,
       provider: providerName,
@@ -441,7 +468,9 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
           lines: [
             { account: `clearing:${c.provider}`, debit: total },
             { account: `pool:${cycle.group_id}`, credit: Number(c.amount_minor) },
-            ...(Number(c.fee_minor) > 0 ? [{ account: 'revenue:fees', credit: Number(c.fee_minor) }] : []),
+            // Frais de paiement : dus au fournisseur (compte de passage) ; frais de service : produit iKobi.
+            ...(Number(c.fee_minor) - Number(c.service_fee_minor) > 0 ? [{ account: `fees:processing:${c.provider}`, credit: Number(c.fee_minor) - Number(c.service_fee_minor) }] : []),
+            ...(Number(c.service_fee_minor) > 0 ? [{ account: 'revenue:service', credit: Number(c.service_fee_minor) }] : []),
           ],
         }, trx);
       }
@@ -595,10 +624,10 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
     const q = await fees.quotePayout({ grossMinor, currency: group.currency, country: group.country, provider: providerName, method: bm.payout_method });
     const ref = reference('IKP');
     await db('payouts').insert({
-      cycle_id: cycle.id, user_id: ben.id, amount_minor: grossMinor, fee_minor: q.feeMinor, currency: group.currency,
+      cycle_id: cycle.id, user_id: ben.id, amount_minor: grossMinor, fee_minor: q.feeMinor, service_fee_minor: q.serviceFeeMinor, currency: group.currency,
       method: bm.payout_method, provider: providerName, phone: bm.payout_phone, reference: ref, request_id: req.id,
     });
-    await audit.log({ actorId, action: 'payout.executing', entity: 'payout', entityId: ref, data: { gross: grossMinor, fee: q.feeMinor, net: q.netMinor } });
+    await audit.log({ actorId, action: 'payout.executing', entity: 'payout', entityId: ref, data: { gross: grossMinor, serviceFee: q.serviceFeeMinor, processingFee: q.processingFeeMinor, net: q.netMinor } });
     const [firstname, ...rest] = (ben.name || 'Membre Ikobi').split(' ');
     const r = await provider.credit({
       amount: fromMinor(q.netMinor), currency: group.currency, phone: bm.payout_phone, method: bm.payout_method,
@@ -643,12 +672,15 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
       } else {
         const gross = Number(p.amount_minor);
         const fee = Number(p.fee_minor);
+        const service = Number(p.service_fee_minor);
+        const processing = fee - service;
         await ledger.post({
           kind: 'payout', refType: 'payout', refId: p.reference, currency: p.currency, memo: `Versement tour ${cycle.number}`,
           lines: [
             { account: `pool:${group.id}`, debit: gross },
             { account: `cash:${p.provider}`, credit: gross - fee },
-            ...(fee > 0 ? [{ account: 'revenue:fees', credit: fee }] : []),
+            ...(processing > 0 ? [{ account: `fees:processing:${p.provider}`, credit: processing }] : []),
+            ...(service > 0 ? [{ account: 'revenue:service', credit: service }] : []),
           ],
         }, trx);
         if (p.request_id) await trx('payout_requests').where({ id: p.request_id }).update({ status: 'executed', updated_at: trx.fn.now() });
@@ -714,8 +746,13 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
       if (r.currency !== currency) problems.push(`${r.reference} : autre devise`);
     }
     const expected = rows.reduce((s, r) => s + Number(r.amount_minor) + Number(r.fee_minor), 0);
+    const processing = rows.reduce((s, r) => s + Number(r.fee_minor) - Number(r.service_fee_minor), 0);
     const declared = Math.round(Number(statementTotal) * 100);
-    if (expected !== declared) problems.push(`Écart : relevé ${fromMinor(declared)} ≠ encaissé ${fromMinor(expected)}`);
+    // Le fournisseur peut régler le brut, ou le net de ses frais de paiement : les deux sont acceptés au centime près.
+    const settlesNet = declared === expected - processing && processing > 0;
+    if (declared !== expected && !settlesNet) {
+      problems.push(`Écart : relevé ${fromMinor(declared)} ≠ encaissé ${fromMinor(expected)}${processing > 0 ? ` (ou ${fromMinor(expected - processing)} net des frais de paiement)` : ''}`);
+    }
     if (problems.length) {
       await audit.log({ actorId, action: 'settlement.discrepancy', entity: 'settlement', entityId: statementRef || 'n/a', data: { provider, currency, problems } });
       throw conflict('settlement_mismatch', problems.join(' · '));
@@ -725,11 +762,17 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
       await trx('contributions').whereIn('reference', refs).andWhere({ settlement_status: 'unsettled' }).update({ settlement_status: 'settled', settled_at: trx.fn.now() });
       await ledger.post({
         kind: 'settlement', refType: 'statement', refId: journalRef, currency, memo: `Règlement ${provider} (${refs.length} opérations)`,
-        lines: [{ account: `cash:${provider}`, debit: expected }, { account: `clearing:${provider}`, credit: expected }],
+        lines: settlesNet
+          ? [
+              { account: `cash:${provider}`, debit: declared },
+              { account: `fees:processing:${provider}`, debit: processing },
+              { account: `clearing:${provider}`, credit: expected },
+            ]
+          : [{ account: `cash:${provider}`, debit: expected }, { account: `clearing:${provider}`, credit: expected }],
       }, trx);
-      await audit.log({ actorId, action: 'settlement.recorded', entity: 'settlement', entityId: journalRef, data: { provider, currency, count: refs.length, total: expected } }, trx);
+      await audit.log({ actorId, action: 'settlement.recorded', entity: 'settlement', entityId: journalRef, data: { provider, currency, count: refs.length, total: expected, received: declared, net: settlesNet } }, trx);
     });
-    return { settled: refs.length, total: fromMinor(expected), currency };
+    return { settled: refs.length, total: fromMinor(expected), received: fromMinor(declared), netOfProcessingFees: settlesNet, currency };
   }
 
   async function reconciliation() {
@@ -781,6 +824,8 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
       status: fresh.status,
       amount: fromMinor(Number(fresh.amount_minor)),
       fee: fromMinor(Number(fresh.fee_minor)),
+      serviceFee: fromMinor(Number(fresh.service_fee_minor)),
+      processingFee: fromMinor(Number(fresh.fee_minor) - Number(fresh.service_fee_minor)),
       total: fromMinor(Number(fresh.amount_minor) + Number(fresh.fee_minor)),
       currency: fresh.currency,
       method: fresh.method,

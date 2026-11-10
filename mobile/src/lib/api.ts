@@ -47,7 +47,11 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
 // --- Types renvoyés par l'API
 export type User = { id: number; phone: string; name: string; platformRole?: string | null; kycStatus?: string };
 
-export type Quote = { currency: string; principal: number; fee: number; total: number; provider: string | null; methods: string[] };
+export type Quote = { currency: string; principal: number; processingFee: number; serviceFee: number; fee: number; total: number; rates: { processing: number; service: number }; provider: string | null; methods: string[] };
+
+export type PayoutFees = { gross: number; serviceFee: number; processingFee: number; net: number; rates: { service: number; processing: number } };
+
+export type AppConfig = { fees: { contribution: { processing: number; service: number }; payout: { processing: number; service: number } } };
 
 export type GroupSummary = {
   id: number;
@@ -83,6 +87,7 @@ export type GroupDetail = {
   inviteCode: string;
   myRole: 'admin' | 'member';
   pot: number;
+  payoutFees: PayoutFees;
   members: { id: number; name: string; phoneEnd: string; role: string; position: number; paidCurrent: boolean | null }[];
   currentCycle: null | {
     number: number;
@@ -111,6 +116,8 @@ export type Contribution = {
   status: 'pending' | 'success' | 'failed';
   amount: number;
   fee: number;
+  serviceFee: number;
+  processingFee: number;
   total: number;
   currency: string;
   method: string;

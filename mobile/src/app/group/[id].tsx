@@ -5,7 +5,7 @@ import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router
 import { useCallback, useState } from 'react';
 import { Alert, Linking, Pressable, RefreshControl, Share, StyleSheet, Text, View } from 'react-native';
 import { api, ApiError, type GroupDetail } from '@/lib/api';
-import { dateFr, daysUntil, dueLabel, FREQ, money } from '@/lib/format';
+import { dateFr, daysUntil, dueLabel, FREQ, money, pct } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { ActionBar, Avatar, Button, Card, ErrorBox, ErrorState, KV, Muted, Pill, Progress, Screen, Segmented, SkeletonCard, useToast } from '@/ui';
 import { C, F, R, S } from '@/theme';
@@ -93,7 +93,7 @@ export default function Group() {
   function requestPayout() {
     Alert.alert(
       'Demander le versement ?',
-      `${money(g!.pot, g!.currency)} pour ${beneficiary?.name ?? 'le bénéficiaire'}. L’équipe iKobi vérifie que les fonds sont réglés avant l’envoi.`,
+      `${money(g!.payoutFees.net, g!.currency)} nets pour ${beneficiary?.name ?? 'le bénéficiaire'} (cagnotte de ${money(g!.pot, g!.currency)}, moins ${money(g!.payoutFees.serviceFee + g!.payoutFees.processingFee, g!.currency)} de frais). L’équipe iKobi vérifie que les fonds sont réglés avant l’envoi.`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -168,7 +168,7 @@ export default function Group() {
           <>
             <Text style={s.potKicker}>Cagnotte prévue à chaque tour</Text>
             <Text style={s.potAmount}>{money(g.amount * (g.maxMembers - 1), g.currency)}</Text>
-            <Text style={s.potText}>Avec {g.maxMembers} membres. {g.members.length} ont rejoint.</Text>
+            <Text style={s.potText}>Avec {g.maxMembers} membres, soit {money(g.payoutFees.net, g.currency)} nets après frais. {g.members.length} ont rejoint.</Text>
             <Progress value={g.members.length} total={g.maxMembers} />
           </>
         ) : g.status === 'completed' ? (
@@ -183,6 +183,7 @@ export default function Group() {
               {c.iAmBeneficiary ? 'Cette cagnotte est pour vous' : `Tour ${c.number} sur ${g.totalCycles} · pour ${beneficiary?.name ?? '—'}`}
             </Text>
             <Text style={s.potAmount}>{money(g.pot, g.currency)}</Text>
+            <Text style={s.potText}>{c.iAmBeneficiary ? 'Vous recevrez' : 'Versé au bénéficiaire'} {money(g.payoutFees.net, g.currency)} nets après frais</Text>
             <Progress value={c.paidCount} total={c.expectedCount} />
             <View style={s.potFoot}>
               <Text style={s.potText}>{c.paidCount}/{c.expectedCount} ont cotisé</Text>
@@ -239,6 +240,14 @@ export default function Group() {
             {c.iHavePaid ? <Status icon="checkmark-circle" tone="green" text="Vous avez payé ce tour." /> : null}
           </Card>
           <Card style={{ gap: 2 }}>
+            <Text style={s.cardTitle}>Versement de la cagnotte</Text>
+            <KV label="Cagnotte du tour" value={money(g.payoutFees.gross, g.currency)} />
+            <KV label={`Frais de service iKobi (${pct(g.payoutFees.rates.service)})`} value={`− ${money(g.payoutFees.serviceFee, g.currency)}`} />
+            <KV label={`Frais de retrait (${pct(g.payoutFees.rates.processing)})`} value={`− ${money(g.payoutFees.processingFee, g.currency)}`} />
+            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 6 }} />
+            <KV label="Montant net versé" value={money(g.payoutFees.net, g.currency)} strong tone="green" />
+          </Card>
+          <Card style={{ gap: 2 }}>
             <Text style={s.cardTitle}>Ma participation</Text>
             <KV label="Total cotisé" value={money(g.me.totalPaid, g.currency)} />
             <KV label="Mon tour de recevoir" value={g.me.position ? `Tour ${g.me.position} sur ${g.totalCycles}` : '—'} />
@@ -277,7 +286,8 @@ export default function Group() {
             `${money(g.amount, g.currency)} par membre, ${FREQ[g.frequency].toLowerCase()}.`,
             `Le bénéficiaire du tour ne cotise pas ; il reçoit ${money(g.amount, g.currency)} × (membres − 1).`,
             'La cagnotte est envoyée quand toutes les cotisations du tour sont collectées et réglées, après vérification par iKobi.',
-            'Les frais éventuels sont affichés avant chaque paiement.',
+            'Les frais de paiement s’ajoutent à chaque cotisation ; ils sont affichés avant de payer.',
+            `À la réception : frais de service iKobi de ${pct(g.payoutFees.rates.service)} et frais de retrait de ${pct(g.payoutFees.rates.processing)}, déduits de la cagnotte.`,
             'Un membre peut payer en retard ou ne pas payer : la tontine repose sur la confiance entre ses membres.',
           ].map((r) => (
             <View key={r} style={{ flexDirection: 'row', gap: S.sm }}>
