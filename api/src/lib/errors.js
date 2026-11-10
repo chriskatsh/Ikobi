@@ -1,3 +1,8 @@
+import { z } from 'zod';
+
+// Messages de validation en français pour toute l'API.
+z.config(z.locales.fr());
+
 export class HttpError extends Error {
   constructor(status, code, message, details) {
     super(message);

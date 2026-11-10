@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Demander une clé API — iKobi</title>
+<meta name="description" content="Demandez une clé pour l’API partenaire iKobi : statistiques agrégées sur l’épargne communautaire.">
+<link rel="canonical" href="https://api.ikobi.app/cle-api">
+<meta name="theme-color" content="#090c15">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_CD">
+<meta property="og:site_name" content="iKobi">
+<meta property="og:title" content="Demander une clé API — iKobi">
+<meta property="og:description" content="Demandez une clé pour l’API partenaire iKobi : statistiques agrégées sur l’épargne communautaire.">
+<meta property="og:url" content="https://api.ikobi.app/cle-api">
+<meta property="og:image" content="https://api.ikobi.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/instrument-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/style.css">
+<script src="/assets/main.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#contenu">Aller au contenu</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="iKobi, accueil"><svg viewBox="0 0 64 64" width="30" height="30" aria-hidden="true"><circle cx="32" cy="32" r="21" fill="none" stroke="#2bd9a0" stroke-opacity=".55" stroke-width="2.5"/><circle cx="32.00" cy="11.00" r="5.2" fill="#2bd9a0"/><circle cx="50.19" cy="21.50" r="5.2" fill="#2bd9a0"/><circle cx="50.19" cy="42.50" r="5.2" fill="#2bd9a0"/><circle cx="32.00" cy="53.00" r="5.2" fill="#2bd9a0"/><circle cx="13.81" cy="42.50" r="5.2" fill="#2bd9a0"/><circle cx="13.81" cy="21.50" r="5.2" fill="#2bd9a0"/><circle cx="32" cy="32" r="10" fill="#f2b441"/></svg>iKobi<small>API</small></a>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
+    <nav class="nav" id="nav" aria-label="Navigation principale"><a href="/docs">Documentation</a><a href="/docs#api-partenaire">API partenaire</a><a href="/statut">Statut</a><a href="https://ikobi.app">ikobi.app</a><a class="btn btn-primary" href="/cle-api">Demander une clé API</a></nav>
+  </div>
+</header>
+<main id="contenu">
+<section class="page-head"><div class="wrap u-stack">
+  <h1>Demander une clé API</h1>
+  <p class="lead">Pour les banques, institutions de microfinance, coopératives, ONG et développeurs. Nous répondons par e-mail après examen de la demande.</p>
+</div></section>
+<section class="u-flush"><div class="wrap">
+  <form class="form" id="key-form" novalidate>
+    <div class="row-2">
+      <div class="field"><label for="orgName">Organisation</label><input id="orgName" name="orgName" required maxlength="120" autocomplete="organization"></div>
+      <div class="field"><label for="orgType">Type d’organisation</label>
+        <select id="orgType" name="orgType" required>
+          <option value="banque">Banque</option><option value="imf">Institution de microfinance</option><option value="cooperative">Coopérative</option>
+          <option value="association">Association ou église</option><option value="ong">ONG</option><option value="entreprise">Entreprise</option>
+          <option value="developpeur">Développeur indépendant</option><option value="autre">Autre</option>
+        </select></div>
+    </div>
+    <div class="row-2">
+      <div class="field"><label for="country">Pays</label>
+        <select id="country" name="country" required><option value="CD">RD Congo</option><option value="GA">Gabon</option><option value="CG">Congo-Brazzaville</option><option value="CM">Cameroun</option><option value="FR">France</option><option value="BE">Belgique</option><option value="ZZ">Autre</option></select></div>
+      <div class="field"><label for="website">Site web <span class="muted">(facultatif)</span></label><input id="website" name="website" type="url" inputmode="url" placeholder="https://" autocomplete="url"></div>
+    </div>
+    <div class="row-2">
+      <div class="field"><label for="contactName">Nom du contact</label><input id="contactName" name="contactName" required maxlength="80" autocomplete="name"></div>
+      <div class="field"><label for="email">E-mail professionnel</label><input id="email" name="email" type="email" required maxlength="160" autocomplete="email"></div>
+    </div>
+    <div class="row-2">
+      <div class="field"><label for="phone">Téléphone <span class="muted">(facultatif)</span></label><input id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel"></div>
+      <div class="field"><label for="volume">Volume d’appels prévu par mois</label>
+        <select id="volume" name="volume"><option value="">Je ne sais pas encore</option><option value="&lt;100">Moins de 100</option><option value="100-1000">100 à 1 000</option><option value="1000-10000">1 000 à 10 000</option><option value="&gt;10000">Plus de 10 000</option></select></div>
+    </div>
+    <div class="field"><label for="useCase">Votre projet</label>
+      <p class="hint" id="useCase-hint">Ce que vous voulez faire avec l’API, pour quels publics, dans quelle zone.</p>
+      <textarea id="useCase" name="useCase" required minlength="30" maxlength="2000" aria-describedby="useCase-hint"></textarea></div>
+    <div class="hp" aria-hidden="true"><label for="company">Ne pas remplir</label><input id="company" name="company" tabindex="-1" autocomplete="off"></div>
+    <div class="check"><input id="consent" name="consent" type="checkbox" required><label for="consent">J’accepte qu’iKobi traite ces informations pour examiner ma demande, selon la <a href="https://ikobi.app/politiques">politique de confidentialité</a>.</label></div>
+    <div><button class="btn btn-primary" type="submit">Envoyer la demande</button></div>
+  </form>
+  <div class="u-result" id="key-result" role="status" tabindex="-1" hidden></div>
+</div></section>
+</main>
+<footer class="foot"><div class="wrap">
+  <div class="legal u-flush">
+    <span>© 2026 iKobi — portail développeurs. Clés et données soumises aux <a href="https://ikobi.app/conditions">conditions d’utilisation</a> et à la <a href="https://ikobi.app/politiques">politique de confidentialité</a>.</span>
+    <a href="mailto:contact@ikobi.app">contact@ikobi.app</a>
+  </div>
+</div></footer>
+</body>
+</html>

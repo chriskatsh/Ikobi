@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Documentation — iKobi API</title>
+<meta name="description" content="Authentification, API partenaire, API de l’application, erreurs, limites de débit et bonnes pratiques de l’API iKobi.">
+<link rel="canonical" href="https://api.ikobi.app/docs">
+<meta name="theme-color" content="#090c15">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_CD">
+<meta property="og:site_name" content="iKobi">
+<meta property="og:title" content="Documentation — iKobi API">
+<meta property="og:description" content="Authentification, API partenaire, API de l’application, erreurs, limites de débit et bonnes pratiques de l’API iKobi.">
+<meta property="og:url" content="https://api.ikobi.app/docs">
+<meta property="og:image" content="https://api.ikobi.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/instrument-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/style.css">
+<script src="/assets/main.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#contenu">Aller au contenu</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="iKobi, accueil"><svg viewBox="0 0 64 64" width="30" height="30" aria-hidden="true"><circle cx="32" cy="32" r="21" fill="none" stroke="#2bd9a0" stroke-opacity=".55" stroke-width="2.5"/><circle cx="32.00" cy="11.00" r="5.2" fill="#2bd9a0"/><circle cx="50.19" cy="21.50" r="5.2" fill="#2bd9a0"/><circle cx="50.19" cy="42.50" r="5.2" fill="#2bd9a0"/><circle cx="32.00" cy="53.00" r="5.2" fill="#2bd9a0"/><circle cx="13.81" cy="42.50" r="5.2" fill="#2bd9a0"/><circle cx="13.81" cy="21.50" r="5.2" fill="#2bd9a0"/><circle cx="32" cy="32" r="10" fill="#f2b441"/></svg>iKobi<small>API</small></a>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
+    <nav class="nav" id="nav" aria-label="Navigation principale"><a href="/docs" aria-current="page">Documentation</a><a href="/docs#api-partenaire">API partenaire</a><a href="/statut">Statut</a><a href="https://ikobi.app">ikobi.app</a><a class="btn btn-primary" href="/cle-api">Demander une clé API</a></nav>
+  </div>
+</header>
+<main id="contenu">
+<div class="wrap docs">
+  <nav aria-label="Sommaire de la documentation">
+    <strong>Démarrer</strong>
+    <a href="#introduction">Introduction</a>
+    <a href="#authentification">Authentification</a>
+    <a href="#erreurs">Erreurs</a>
+    <a href="#limites">Limites de débit</a>
+    <strong>Référence</strong>
+    <a href="#api-partenaire">API partenaire</a>
+    <a href="#api-application">API de l’application</a>
+    <a href="#webhooks">Webhooks</a>
+    <strong>Politique</strong>
+    <a href="#donnees">Données et confidentialité</a>
+    <a href="#versions">Versions</a>
+  </nav>
+  <article>
+    <h1 class="u-h1-s">Documentation</h1>
+    <h2 id="introduction">Introduction</h2>
+    <p>L’API iKobi est une API REST qui échange du JSON en UTF-8. Toutes les requêtes passent par HTTPS sur <code>https://api.ikobi.app</code>. Les montants sont des nombres décimaux dans la devise indiquée (<code>CDF</code> aujourd’hui) ; les dates d’échéance sont au format <code>AAAA-MM-JJ</code>, les horodatages en ISO 8601 UTC.</p>
+    <p>Deux familles de routes :</p>
+    <ul>
+      <li><strong>API partenaire</strong> (<code>/partner/v1</code>) : pour les institutions, avec une clé API. Lecture seule, statistiques agrégées.</li>
+      <li><strong>API de l’application</strong> (<code>/v1</code>) : utilisée par l’app iKobi, avec le jeton de session d’un membre.</li>
+    </ul>
+
+    <h2 id="authentification">Authentification</h2>
+    <h3>Clé API partenaire</h3>
+    <p>Envoyez votre clé dans l’en-tête <code>Authorization</code>. L’en-tête <code>X-API-Key</code> est aussi accepté.</p>
+    <pre><code>Authorization: Bearer ikb_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</code></pre>
+    <p>La clé est affichée une seule fois, à sa création. Gardez-la côté serveur : jamais dans une application mobile, une page web ou un dépôt de code. Si elle est exposée, demandez sa révocation à <a href="mailto:contact@ikobi.app">contact@ikobi.app</a>.</p>
+    <h3>Session membre (application)</h3>
+    <p>Le membre reçoit un code à six chiffres sur WhatsApp, puis l’échange contre un jeton de session.</p>
+    <pre><code>POST /v1/auth/otp/request   { "phone": "0812345678" }
+POST /v1/auth/otp/verify    { "phone": "0812345678", "code": "123456", "name": "Aline" }
+→ { "token": "eyJ…", "user": { "id": 1, "name": "Aline", … } }
+
+Authorization: Bearer eyJ…</code></pre>
+
+    <h2 id="erreurs">Erreurs</h2>
+    <p>Les erreurs renvoient un code HTTP explicite et un corps de forme constante :</p>
+    <pre><code>{
+  "error": {
+    "code": "validation",
+    "message": "Données invalides",
+    "details": [{ "path": "email", "message": "E-mail invalide" }]
+  }
+}</code></pre>
+    <div class="table-wrap"><table>
+      <thead><tr><th>HTTP</th><th>Signification</th></tr></thead>
+      <tbody>
+        <tr><td class="num">400</td><td>Requête invalide (<code>validation</code>, <code>bad_json</code>, <code>payment_refused</code>…)</td></tr>
+        <tr><td class="num">401</td><td>Clé ou jeton absent, invalide ou révoqué</td></tr>
+        <tr><td class="num">403</td><td>Authentifié, mais sans le droit nécessaire</td></tr>
+        <tr><td class="num">404</td><td>Ressource introuvable</td></tr>
+        <tr><td class="num">409</td><td>Conflit d’état (déjà payé, tour non prêt, demande déjà traitée…)</td></tr>
+        <tr><td class="num">429</td><td>Trop de requêtes</td></tr>
+        <tr><td class="num">503</td><td>Service en configuration ou en maintenance</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="limites">Limites de débit</h2>
+    <p>API partenaire : 60 requêtes par minute et par adresse IP. Les en-têtes <code>RateLimit-*</code> indiquent le quota restant. Au-delà, l’API répond <code>429</code> : attendez la fin de la fenêtre avant de réessayer.</p>
+
+    <h2 id="api-partenaire">API partenaire</h2>
+    <div class="endpoint"><span class="verb">GET</span><code>/partner/v1/ping</code></div><p class="muted">Vérifie votre clé. Renvoie le nom de l’organisation et les droits de la clé.</p>
+    <pre><code>{ "ok": true, "partner": "Coopérative de Matete", "scopes": ["insights:read"] }</code></pre>
+    <div class="endpoint"><span class="verb">GET</span><code>/partner/v1/insights</code></div><p class="muted">Statistiques agrégées de la plateforme. Droit requis : insights:read.</p>
+    <pre><code>{
+  "generatedAt": "2026-11-10T19:00:00.000Z",
+  "available": true,
+  "communities": { "total": 25, "forming": 3, "active": 18, "completed": 4 },
+  "members": 500,
+  "completedCycles": 112,
+  "contributions": {
+    "allTime":    [{ "currency": "CDF", "count": 5210, "volume": 104200000 }],
+    "last30Days": [{ "currency": "CDF", "count": 1840, "volume": 36800000 }],
+    "onTimeRate": 91.4
+  },
+  "note": "Chiffres agrégés et indicatifs…"
+}</code></pre>
+    <p>Tant que la plateforme compte moins de cinq communautés, la réponse vaut <code>{ "available": false, "reason": "…" }</code>. Ces indicateurs ne constituent ni une évaluation de crédit ni une décision de financement.</p>
+    <p class="note">D’autres ressources (suivi d’un pilote, export de rapports) seront ajoutées avec nos premiers partenaires. Dites-nous ce dont vous avez besoin dans votre demande de clé.</p>
+
+    <h2 id="api-application">API de l’application</h2>
+    <p>Routes utilisées par l’app iKobi. Elles exigent un jeton de session membre et ne sont pas ouvertes aux intégrations tierces.</p>
+    <div class="endpoint"><span class="verb">GET</span><code>/v1/config</code></div><p class="muted">Opérateurs et devises disponibles.</p>
+    <div class="endpoint"><span class="verb">GET</span><code>/v1/me</code></div><p class="muted">Profil du membre connecté.</p>
+    <div class="endpoint"><span class="verb">GET</span><code>/v1/groups</code></div><p class="muted">Tontines du membre, avec l’état du tour en cours.</p>
+    <div class="endpoint"><span class="verb post">POST</span><code>/v1/groups</code></div><p class="muted">Crée une tontine : nom, montant, devise, fréquence, nombre de membres, première échéance, numéro de versement.</p>
+    <div class="endpoint"><span class="verb post">POST</span><code>/v1/groups/join</code></div><p class="muted">Rejoint une tontine avec son code d’invitation.</p>
+    <div class="endpoint"><span class="verb">GET</span><code>/v1/groups/{id}</code></div><p class="muted">Détail : membres, calendrier, montants prévu, collecté, réglé et versé.</p>
+    <div class="endpoint"><span class="verb post">POST</span><code>/v1/groups/{id}/start</code></div><p class="muted">Démarre la tontine (organisateur).</p>
+    <div class="endpoint"><span class="verb">GET</span><code>/v1/groups/{id}/contributions/quote?method=mpesa</code></div><p class="muted">Devis : cotisation, frais, total à payer.</p>
+    <div class="endpoint"><span class="verb post">POST</span><code>/v1/groups/{id}/contributions</code></div><p class="muted">Lance une cotisation Mobile Money. Statut initial « pending ».</p>
+    <div class="endpoint"><span class="verb">GET</span><code>/v1/contributions/{id}</code></div><p class="muted">Statut d’une cotisation.</p>
+    <div class="endpoint"><span class="verb post">POST</span><code>/v1/groups/{id}/cycles/{n}/payout-request</code></div><p class="muted">Demande le versement de la cagnotte (organisateur). Validé ensuite par l’équipe iKobi.</p>
+    <div class="endpoint"><span class="verb">GET</span><code>/v1/groups/{id}/history</code></div><p class="muted">Historique des cotisations et des versements.</p>
+
+    <h2 id="webhooks">Webhooks</h2>
+    <p>iKobi reçoit les notifications de son partenaire de paiement et de WhatsApp. Chaque notification est authentifiée par signature, dédoublonnée et, pour un paiement réussi, reconfirmée auprès du fournisseur avant d’être prise en compte. L’envoi de webhooks vers les partenaires n’est pas encore proposé.</p>
+
+    <h2 id="donnees">Données et confidentialité</h2>
+    <ul>
+      <li>L’API partenaire ne renvoie aucune donnée personnelle : ni nom, ni numéro, ni détail d’une tontine.</li>
+      <li>Chaque clé est liée à une organisation identifiée et à un usage déclaré ; son utilisation est journalisée.</li>
+      <li>Toute réidentification de membres, revente de données ou usage différent de celui déclaré entraîne la révocation de la clé.</li>
+    </ul>
+
+    <h2 id="versions">Versions</h2>
+    <p>La version figure dans le chemin (<code>/v1</code>, <code>/partner/v1</code>). Les ajouts compatibles (nouveaux champs, nouvelles routes) peuvent arriver à tout moment : ignorez les champs que vous ne connaissez pas. Une rupture de compatibilité donnera lieu à une nouvelle version annoncée à l’avance aux détenteurs de clé.</p>
+  </article>
+</div>
+</main>
+<footer class="foot"><div class="wrap">
+  <div class="legal u-flush">
+    <span>© 2026 iKobi — portail développeurs. Clés et données soumises aux <a href="https://ikobi.app/conditions">conditions d’utilisation</a> et à la <a href="https://ikobi.app/politiques">politique de confidentialité</a>.</span>
+    <a href="mailto:contact@ikobi.app">contact@ikobi.app</a>
+  </div>
+</div></footer>
+</body>
+</html>

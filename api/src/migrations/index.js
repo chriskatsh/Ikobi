@@ -214,6 +214,42 @@ migrations.push({
   },
 });
 
+// Portail développeurs : demandes de clé et clés partenaires (ajouts uniquement).
+migrations.push({
+  id: '003_developer_portal',
+  async up(knex) {
+    await knex.schema.createTable('api_key_requests', (t) => {
+      t.increments('id').primary();
+      t.string('org_name', 120).notNullable();
+      t.string('org_type', 20).notNullable();
+      t.string('country', 2).notNullable();
+      t.string('contact_name', 80).notNullable();
+      t.string('email', 160).notNullable();
+      t.string('phone', 20).nullable();
+      t.string('website', 200).nullable();
+      t.text('use_case').notNullable();
+      t.string('volume', 20).nullable();
+      t.string('status', 12).notNullable().defaultTo('requested'); // requested | approved | rejected
+      t.integer('reviewed_by').unsigned().nullable();
+      t.string('review_note', 200).nullable();
+      t.string('ip_hash', 64).nullable();
+      t.timestamps(true, true);
+      t.index(['email']);
+    });
+    await knex.schema.createTable('api_keys', (t) => {
+      t.increments('id').primary();
+      t.integer('request_id').unsigned().nullable().references('api_key_requests.id');
+      t.string('partner_name', 120).notNullable();
+      t.string('prefix', 16).notNullable();
+      t.string('key_hash', 64).notNullable().unique();
+      t.string('scopes', 200).notNullable().defaultTo('insights:read');
+      t.string('status', 10).notNullable().defaultTo('active'); // active | revoked
+      t.timestamp('last_used_at').nullable();
+      t.timestamps(true, true);
+    });
+  },
+});
+
 export async function migrate(knex) {
   const has = await knex.schema.hasTable('ikobi_migrations');
   if (!has) {

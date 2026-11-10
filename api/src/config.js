@@ -77,7 +77,8 @@ export function loadConfig(overrides = {}) {
     if (!cfg.whatsapp.appSecret) missing.push('WA_APP_SECRET');
     if (!cfg.whatsapp.verifyToken) missing.push('WA_VERIFY_TOKEN');
     if (cfg.awa.simulator) throw new Error('AWA_SIMULATOR est interdit en production');
-    if (missing.length) throw new Error(`Variables d'environnement manquantes : ${missing.join(', ')}`);
+    cfg.missing = missing;
+    if (missing.length && !overrides.allowIncomplete) throw new Error(`Variables d'environnement manquantes : ${missing.join(', ')}`);
   }
   return cfg;
 }

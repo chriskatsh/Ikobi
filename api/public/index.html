@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>iKobi API — portail développeurs</title>
+<meta name="description" content="Documentation de l’API iKobi, API partenaire de statistiques agrégées et demande de clé API pour les banques, IMF, coopératives et développeurs.">
+<link rel="canonical" href="https://api.ikobi.app/">
+<meta name="theme-color" content="#090c15">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_CD">
+<meta property="og:site_name" content="iKobi">
+<meta property="og:title" content="iKobi API — portail développeurs">
+<meta property="og:description" content="Documentation de l’API iKobi, API partenaire de statistiques agrégées et demande de clé API pour les banques, IMF, coopératives et développeurs.">
+<meta property="og:url" content="https://api.ikobi.app/">
+<meta property="og:image" content="https://api.ikobi.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/instrument-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/style.css">
+<script src="/assets/main.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#contenu">Aller au contenu</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="iKobi, accueil"><svg viewBox="0 0 64 64" width="30" height="30" aria-hidden="true"><circle cx="32" cy="32" r="21" fill="none" stroke="#2bd9a0" stroke-opacity=".55" stroke-width="2.5"/><circle cx="32.00" cy="11.00" r="5.2" fill="#2bd9a0"/><circle cx="50.19" cy="21.50" r="5.2" fill="#2bd9a0"/><circle cx="50.19" cy="42.50" r="5.2" fill="#2bd9a0"/><circle cx="32.00" cy="53.00" r="5.2" fill="#2bd9a0"/><circle cx="13.81" cy="42.50" r="5.2" fill="#2bd9a0"/><circle cx="13.81" cy="21.50" r="5.2" fill="#2bd9a0"/><circle cx="32" cy="32" r="10" fill="#f2b441"/></svg>iKobi<small>API</small></a>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
+    <nav class="nav" id="nav" aria-label="Navigation principale"><a href="/docs">Documentation</a><a href="/docs#api-partenaire">API partenaire</a><a href="/statut">Statut</a><a href="https://ikobi.app">ikobi.app</a><a class="btn btn-primary" href="/cle-api">Demander une clé API</a></nav>
+  </div>
+</header>
+<main id="contenu">
+<section class="hero"><div class="wrap u-hero-api">
+  <div>
+    <h1 class="u-w13">Construire avec iKobi.</h1>
+    <p class="lead">L’API qui fait tourner l’app iKobi et son assistant WhatsApp, et une API partenaire pour suivre l’épargne communautaire sans jamais exposer de donnée personnelle.</p>
+    <div class="actions"><a class="btn btn-primary" href="/cle-api">Demander une clé API</a><a class="btn btn-ghost" href="/docs">Lire la documentation</a></div>
+    <p class="reassure"><span class="status-pill" id="api-status"><i></i><span>Vérification de l’état de l’API…</span></span></p>
+  </div>
+  <pre aria-label="Exemple d’appel à l’API partenaire"><code>curl https://api.ikobi.app/partner/v1/insights \
+  -H "Authorization: Bearer ikb_live_…"
+
+{
+  "available": true,
+  "communities": { "total": 25, "active": 18, … },
+  "members": 500,
+  "completedCycles": 112,
+  "contributions": {
+    "last30Days": [{ "currency": "CDF",
+                     "count": 1840, … }],
+    "onTimeRate": 91.4
+  }
+}</code></pre>
+</div></section>
+<section><div class="wrap">
+  <div class="audiences">
+    <div class="audience feature">
+      <h2>API partenaire</h2>
+      <p class="muted">Pour les banques, institutions de microfinance et organisations communautaires. Lecture seule, statistiques agrégées, publiées à partir de cinq communautés.</p>
+      <div class="endpoint"><span class="verb">GET</span><code>/partner/v1/insights</code></div>
+      <div class="endpoint"><span class="verb">GET</span><code>/partner/v1/ping</code></div>
+      <div><a href="/docs#api-partenaire">Référence de l’API partenaire</a></div>
+    </div>
+    <div class="audience">
+      <h3>API de l’application</h3>
+      <p class="muted">Authentification par code WhatsApp, tontines, cotisations Mobile Money, versements. Réservée aux applications iKobi.</p>
+      <a href="/docs#api-application">Voir les routes</a>
+    </div>
+    <div class="audience">
+      <h3>Spécification OpenAPI</h3>
+      <p class="muted">Importez le fichier dans Postman, Insomnia ou votre générateur de client.</p>
+      <a href="/openapi.json">Télécharger openapi.json</a>
+    </div>
+  </div>
+</div></section>
+<section><div class="wrap">
+  <div class="section-head"><h2>Obtenir une clé, en trois étapes</h2></div>
+  <ol class="steps steps-3">
+    <li><h3>Décrivez votre projet</h3><p>Organisation, contact, usage prévu. Deux minutes suffisent.</p></li>
+    <li><h3>Nous examinons</h3><p>L’équipe conformité vérifie l’organisation et l’usage. Réponse par e-mail.</p></li>
+    <li><h3>Recevez votre clé</h3><p>Transmise par un canal sûr convenu avec vous, affichée une seule fois. Révocable à tout moment.</p></li>
+  </ol>
+  <p class="u-mt-l"><a class="btn btn-primary" href="/cle-api">Commencer la demande</a></p>
+</div></section>
+</main>
+<footer class="foot"><div class="wrap">
+  <div class="legal u-flush">
+    <span>© 2026 iKobi — portail développeurs. Clés et données soumises aux <a href="https://ikobi.app/conditions">conditions d’utilisation</a> et à la <a href="https://ikobi.app/politiques">politique de confidentialité</a>.</span>
+    <a href="mailto:contact@ikobi.app">contact@ikobi.app</a>
+  </div>
+</div></footer>
+</body>
+</html>
