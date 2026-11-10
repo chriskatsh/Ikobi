@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.sqlite
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+ios/
+android/
+.DS_Store
