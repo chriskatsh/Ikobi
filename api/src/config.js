@@ -34,16 +34,15 @@ export function loadConfig(overrides = {}) {
           },
     },
 
-    moko: {
-      baseUrl: env.MOKO_BASE_URL || 'https://paydrc.gofreshbakery.net/api/v5',
-      merchantId: env.MOKO_MERCHANT_ID || '',
-      merchantSecret: env.MOKO_MERCHANT_SECRET || '',
-      // Clés de sécurité du callback (fournies par MOKO).
-      aesKey: env.MOKO_AES_KEY || '',
-      aesIv: env.MOKO_AES_IV || '', // par défaut = clé AES (pratique observée dans la doc MOKO)
-      hmacKey: env.MOKO_HMAC_KEY || '',
-      // Montant facturé avec le nom/prénom/email exigés par MOKO.
-      defaultEmail: env.MOKO_DEFAULT_EMAIL || 'paiements@ikobi.app',
+    awa: {
+      baseUrl: env.AWA_BASE_URL || 'https://api.awanetwork.tech',
+      publicId: env.AWA_PUBLIC_ID || '',
+      merchantId: env.AWA_MERCHANT_ID || '',
+      secretKey: env.AWA_SECRET_KEY || '',
+      // Surcharge des identifiants opérateurs, ex. {"mpesa":2071,"orange":2013,"airtel":2014,"africell":2015}
+      providerIds: env.AWA_PROVIDER_IDS ? JSON.parse(env.AWA_PROVIDER_IDS) : undefined,
+      // Simulateur AWA (opérateur 14) : tests uniquement, refusé en production.
+      simulator: bool(env.AWA_SIMULATOR, false),
     },
 
     whatsapp: {
@@ -58,8 +57,10 @@ export function loadConfig(overrides = {}) {
       botNumberDisplay: env.WA_BOT_NUMBER || '',
     },
 
-    // manual : l'admin du groupe déclenche le versement ; auto : versement dès que tout le monde a payé.
-    payoutMode: env.PAYOUT_MODE === 'auto' ? 'auto' : 'manual',
+    // Un versement exige que les cotisations soient réglées sur le compte marchand (relevé fournisseur).
+    requireSettlement: bool(env.REQUIRE_SETTLEMENT_BEFORE_PAYOUT, true),
+    // Numéros qui reçoivent le rôle « admin » plateforme à leur connexion (amorçage).
+    platformAdmins: (env.PLATFORM_ADMIN_PHONES || '').split(',').map((x) => x.trim()).filter(Boolean),
     remindersEnabled: bool(env.REMINDERS_ENABLED, true),
     ...overrides,
   };
@@ -68,14 +69,14 @@ export function loadConfig(overrides = {}) {
     const missing = [];
     if (!cfg.jwtSecret) missing.push('JWT_SECRET');
     if (!cfg.otpSecret) missing.push('OTP_SECRET');
-    if (!cfg.moko.merchantId) missing.push('MOKO_MERCHANT_ID');
-    if (!cfg.moko.merchantSecret) missing.push('MOKO_MERCHANT_SECRET');
-    if (!cfg.moko.hmacKey) missing.push('MOKO_HMAC_KEY');
-    if (!cfg.moko.aesKey) missing.push('MOKO_AES_KEY');
+    if (!cfg.awa.publicId) missing.push('AWA_PUBLIC_ID');
+    if (!cfg.awa.merchantId) missing.push('AWA_MERCHANT_ID');
+    if (!cfg.awa.secretKey) missing.push('AWA_SECRET_KEY');
     if (!cfg.whatsapp.phoneNumberId) missing.push('WA_PHONE_NUMBER_ID');
     if (!cfg.whatsapp.accessToken) missing.push('WA_ACCESS_TOKEN');
     if (!cfg.whatsapp.appSecret) missing.push('WA_APP_SECRET');
     if (!cfg.whatsapp.verifyToken) missing.push('WA_VERIFY_TOKEN');
+    if (cfg.awa.simulator) throw new Error('AWA_SIMULATOR est interdit en production');
     if (missing.length) throw new Error(`Variables d'environnement manquantes : ${missing.join(', ')}`);
   }
   return cfg;

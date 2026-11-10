@@ -44,7 +44,7 @@ export function createBot({ db, whatsapp, tontine, config, logger = console }) {
     const hello = user.name ? `Mbote ${user.name.split(' ')[0]} 👋` : 'Mbote 👋';
     await whatsapp.sendButtons(
       user.phone,
-      `${hello}\nBienvenue sur *Ikobi*, ta tontine en toute sécurité.\n\nQue veux-tu faire ?`,
+      `${hello}\nBienvenue sur *Ikobi*, ta tontine en toute transparence.\n\nQue veux-tu faire ?`,
       [
         { id: 'menu:pay', title: '💸 Cotiser' },
         { id: 'menu:status', title: '📊 Mes tontines' },
@@ -136,7 +136,12 @@ export function createBot({ db, whatsapp, tontine, config, logger = console }) {
     const method = detectMethod(payPhone);
     await setSession(user.phone, 'confirm_pay', { groupId: d.group_id, payPhone });
     const amount = formatMoney(Number(d.amount_minor), d.currency);
-    const text = `💸 *Cotisation ${d.name}*\nTour ${d.number} · échéance ${formatDateFr(d.due_date)}\n\nMontant : *${amount}*\nNuméro : ${maskPhone(payPhone)}\n\nTu vas recevoir une demande de paiement sur ton téléphone.`;
+    let feeLine = '';
+    if (method) {
+      const q = await tontine.quoteContribution(user.id, d.group_id, method).catch(() => null);
+      if (q && q.fee > 0) feeLine = `\nFrais : ${formatMoney(Math.round(q.fee * 100), d.currency)}\n*Total à payer : ${formatMoney(Math.round(q.total * 100), d.currency)}*`;
+    }
+    const text = `💸 *Cotisation ${d.name}*\nTour ${d.number} · échéance ${formatDateFr(d.due_date)}\n\nMontant : *${amount}*${feeLine}\nNuméro : ${maskPhone(payPhone)}\n\nTu vas recevoir une demande de paiement sur ton téléphone.`;
     const buttons = method
       ? [{ id: `pay:go:${method}`, title: `Payer · ${METHODS[method]}`.slice(0, 20) }, { id: 'pay:methods', title: 'Autre opérateur' }, { id: 'pay:cancel', title: 'Annuler' }]
       : [{ id: 'pay:methods', title: 'Choisir opérateur' }, { id: 'pay:cancel', title: 'Annuler' }];

@@ -119,6 +119,101 @@ const migrations = [
   },
 ];
 
+// V3 — Phase 1 : intégrité financière. Uniquement des AJOUTS (aucune donnée supprimée).
+migrations.push({
+  id: '002_financial_core',
+  async up(knex) {
+    // Grand livre en partie double, en ajout seul (jamais de UPDATE/DELETE applicatif).
+    await knex.schema.createTable('ledger_journals', (t) => {
+      t.increments('id').primary();
+      t.string('kind', 30).notNullable(); // contribution_collected | settlement | payout | fee …
+      t.string('ref_type', 20).notNullable();
+      t.string('ref_id', 60).notNullable();
+      t.string('currency', 3).notNullable();
+      t.string('memo', 200).notNullable().defaultTo('');
+      t.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
+      t.unique(['kind', 'ref_type', 'ref_id']); // idempotence : une écriture par événement
+    });
+    await knex.schema.createTable('ledger_entries', (t) => {
+      t.increments('id').primary();
+      t.integer('journal_id').unsigned().notNullable().references('ledger_journals.id');
+      t.string('account', 60).notNullable().index();
+      t.bigInteger('debit_minor').notNullable().defaultTo(0);
+      t.bigInteger('credit_minor').notNullable().defaultTo(0);
+      t.string('currency', 3).notNullable();
+      t.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
+    });
+
+    // Événements bruts des fournisseurs de paiement : anti-rejeu et traçabilité.
+    await knex.schema.createTable('provider_events', (t) => {
+      t.increments('id').primary();
+      t.string('provider', 20).notNullable();
+      t.string('reference', 60).nullable().index();
+      t.string('event_hash', 64).notNullable().unique();
+      t.string('status_reported', 20).nullable();
+      t.string('outcome', 30).notNullable(); // applied | duplicate | ignored | rejected | unknown_reference
+      t.timestamp('received_at').notNullable().defaultTo(knex.fn.now());
+    });
+
+    // Journal d'audit des actions touchant l'argent ou l'identité (ajout seul).
+    await knex.schema.createTable('audit_log', (t) => {
+      t.increments('id').primary();
+      t.integer('actor_id').unsigned().nullable();
+      t.string('actor_type', 12).notNullable(); // user | system | provider
+      t.string('action', 50).notNullable();
+      t.string('entity', 30).notNullable();
+      t.string('entity_id', 60).notNullable();
+      t.text('data').nullable();
+      t.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
+      t.index(['entity', 'entity_id']);
+    });
+
+    // Règles de frais configurables (pays, fournisseur, opérateur, type de transaction).
+    await knex.schema.createTable('fee_rules', (t) => {
+      t.increments('id').primary();
+      t.string('country', 2).notNullable().defaultTo('*');
+      t.string('provider', 20).notNullable().defaultTo('*');
+      t.string('method', 12).notNullable().defaultTo('*');
+      t.string('tx_type', 12).notNullable(); // contribution | payout
+      t.string('currency', 3).notNullable().defaultTo('*');
+      t.integer('pct_bp').notNullable().defaultTo(0); // points de base : 300 = 3 %
+      t.bigInteger('fixed_minor').notNullable().defaultTo(0);
+      t.boolean('active').notNullable().defaultTo(true);
+      t.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
+    });
+
+    // Demandes de versement : l'organisateur demande (maker), l'équipe Ikobi approuve (checker).
+    await knex.schema.createTable('payout_requests', (t) => {
+      t.increments('id').primary();
+      t.integer('cycle_id').unsigned().notNullable().references('cycles.id');
+      t.integer('requested_by').unsigned().notNullable().references('users.id');
+      t.integer('reviewed_by').unsigned().nullable().references('users.id');
+      t.string('status', 12).notNullable().defaultTo('requested'); // requested | approved | rejected | executed
+      t.string('review_note', 200).nullable();
+      t.timestamps(true, true);
+    });
+
+    await knex.schema.alterTable('users', (t) => {
+      t.string('platform_role', 12).nullable(); // ops | finance | compliance | admin
+      t.string('kyc_status', 12).notNullable().defaultTo('none'); // none | pending | verified | rejected
+    });
+    await knex.schema.alterTable('groups', (t) => {
+      t.string('country', 2).notNullable().defaultTo('CD');
+    });
+    await knex.schema.alterTable('contributions', (t) => {
+      t.string('provider', 20).notNullable().defaultTo('moko');
+      t.bigInteger('fee_minor').notNullable().defaultTo(0);
+      t.string('settlement_status', 10).notNullable().defaultTo('unsettled'); // unsettled | settled
+      t.timestamp('settled_at').nullable();
+    });
+    await knex.schema.alterTable('payouts', (t) => {
+      t.string('provider', 20).notNullable().defaultTo('moko');
+      t.bigInteger('fee_minor').notNullable().defaultTo(0);
+      t.integer('request_id').unsigned().nullable();
+    });
+  },
+});
+
 export async function migrate(knex) {
   const has = await knex.schema.hasTable('ikobi_migrations');
   if (!has) {

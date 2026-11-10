@@ -3,7 +3,7 @@ import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db.js';
 import { migrate } from '../src/migrations/index.js';
 import { createApp } from '../src/app.js';
-import { createMockMoko } from '../src/services/moko.js';
+import { createMockProvider } from '../src/services/mock-provider.js';
 import { createMockWhatsApp } from '../src/services/whatsapp.js';
 
 const silent = { info() {}, warn() {}, error() {} };
@@ -14,12 +14,14 @@ export async function setup(overrides = {}) {
     isProd: false,
     publicUrl: 'https://api.test',
     otpDebug: true,
+    platformAdmins: ['243899999999'],
+    requireSettlement: true,
     db: { client: 'better-sqlite3', connection: { filename: ':memory:' } },
     ...overrides,
   });
   const db = createDb(config.db);
   await migrate(db);
-  const moko = createMockMoko();
+  const psp = createMockProvider();
   const whatsapp = createMockWhatsApp();
   const pushes = [];
   const fetchImpl = async (_url, opts) => {
@@ -27,21 +29,28 @@ export async function setup(overrides = {}) {
     return { ok: true, json: async () => ({}) };
   };
   const { buildServices } = await import('../src/app.js');
-  const services = buildServices({ db, config, moko, whatsapp, fetchImpl, logger: silent });
-  const { app } = createApp({ db, config, moko, whatsapp, services, logger: silent });
+  const services = buildServices({ db, config, providers: { awa: psp }, whatsapp, fetchImpl, logger: silent });
+  const { app } = createApp({ db, config, providers: { awa: psp }, whatsapp, services, logger: silent });
   const agent = request(app);
 
+  const sessions = new Map();
   async function login(phone, name) {
+    if (sessions.has(phone)) return sessions.get(phone);
+    const s = await freshLogin(phone, name);
+    sessions.set(phone, s);
+    return s;
+  }
+  async function freshLogin(phone, name) {
     const r1 = await agent.post('/v1/auth/otp/request').send({ phone });
     const r2 = await agent.post('/v1/auth/otp/verify').send({ phone, code: r1.body.debugCode, name });
     return { token: r2.body.token, user: r2.body.user, auth: { Authorization: `Bearer ${r2.body.token}` } };
   }
 
-  async function callback(reference, status = 'Success') {
-    return agent.post('/webhooks/moko').send({ data: { Reference: reference, Trans_Status: status } });
+  async function callback(reference, status = 'Success', extra = {}) {
+    return agent.post('/webhooks/awa').send({ order_id: reference, status: status.toLowerCase(), ...extra });
   }
 
-  return { db, config, moko, whatsapp, services, app, agent, login, callback, pushes, close: () => db.destroy() };
+  return { db, config, psp, whatsapp, services, app, agent, login, callback, pushes, close: () => db.destroy() };
 }
 
 export function waMessage(from, { text, replyId, name = 'Testeur', id } = {}) {

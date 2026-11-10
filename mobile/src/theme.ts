@@ -1,4 +1,4 @@
-// Identité visuelle Ikobi : nuit profonde, or de la cagnotte, vert de la confiance.
+// Identité visuelle Ikobi : bleu nuit profond, accents vert vif, typographie blanche.
 export const C = {
   bg: '#090C15',
   surface: '#121726',
@@ -7,8 +7,9 @@ export const C = {
   text: '#F4F6FB',
   muted: '#9AA3B8',
   faint: '#5F6880',
-  gold: '#F5C451',
-  goldDim: '#3A3220',
+  // « gold » = accent principal de la marque (vert). Nom conservé pour limiter les changements.
+  gold: '#2BD9A0',
+  goldDim: '#10352C',
   green: '#2BD9A0',
   greenDim: '#123A30',
   red: '#FF6B6B',

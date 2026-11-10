@@ -12,7 +12,7 @@ export default function Create() {
   const { user } = useSession();
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState<'USD' | 'CDF'>('USD');
+  const [currency, setCurrency] = useState<'USD' | 'CDF'>('CDF');
   const [frequency, setFrequency] = useState<'weekly' | 'biweekly' | 'monthly'>('monthly');
   const [maxMembers, setMaxMembers] = useState('10');
   const [startDate, setStartDate] = useState(todayIso());
@@ -50,12 +50,12 @@ export default function Create() {
 
       <Label>Devise</Label>
       <View style={{ flexDirection: 'row', gap: S.sm }}>
-        {(['USD', 'CDF'] as const).map((c) => (
-          <Button key={c} title={c === 'USD' ? 'Dollar ($)' : 'Franc (FC)'} variant={currency === c ? 'primary' : 'secondary'} onPress={() => setCurrency(c)} style={{ flex: 1 }} />
-        ))}
+        <Button title="Franc congolais (FC)" variant="primary" onPress={() => setCurrency('CDF')} style={{ flex: 1 }} />
+        <Button title="Dollar ($)" variant="secondary" disabled onPress={() => {}} style={{ flex: 1 }} />
       </View>
+      <Muted style={{ fontSize: 13 }}>Les cotisations en dollars arriveront dès que notre partenaire de paiement les accepte.</Muted>
 
-      <Field label="Cotisation par membre et par tour" placeholder={currency === 'USD' ? '50' : '100000'} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+      <Field label="Cotisation par membre et par tour" placeholder={currency === 'USD' ? '50' : '20000'} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
 
       <Label>Fréquence</Label>
       {(['weekly', 'biweekly', 'monthly'] as const).map((f) => (

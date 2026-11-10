@@ -4,7 +4,7 @@ import { Card, H2, Muted, Screen } from '@/ui';
 const SECTIONS = [
   {
     title: 'Ce que fait Ikobi',
-    text: 'Ikobi aide des groupes de personnes qui se connaissent à organiser une tontine (likelemba) : suivi des membres, des tours, des cotisations et des versements. Les paiements passent par les opérateurs Mobile Money via notre partenaire agréé MOKO Afrika.',
+    text: 'Ikobi aide des groupes de personnes qui se connaissent à organiser une tontine (likelemba) : suivi des membres, des tours, des cotisations et des versements. Les paiements passent par les opérateurs Mobile Money via la passerelle de paiement AWA Network. Ikobi n’est ni une banque ni un établissement de paiement.',
   },
   {
     title: 'Données collectées',
@@ -17,6 +17,14 @@ const SECTIONS = [
   {
     title: 'WhatsApp',
     text: 'Si tu utilises le chatbot Ikobi, tes messages au bot sont traités via WhatsApp Business (Meta) uniquement pour exécuter tes demandes : cotiser, consulter ton statut, rejoindre une tontine.',
+  },
+  {
+    title: 'Risques',
+    text: 'Une tontine repose sur l’engagement de chaque membre : un membre peut payer en retard ou ne pas payer. Ikobi ne garantit pas le versement d’une cagnotte tant que toutes les cotisations n’ont pas été collectées et réglées. Aucun rendement n’est promis.',
+  },
+  {
+    title: 'Frais',
+    text: 'Les frais éventuels (opérateur, traitement) sont affichés avant chaque paiement, avec le total à payer. Rien n’est prélevé sans être affiché.',
   },
   {
     title: 'Responsabilité',
