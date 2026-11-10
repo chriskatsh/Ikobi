@@ -6,7 +6,7 @@ Ikobi organise des tontines à tour de rôle entre personnes de confiance : memb
 
 ```
 ikobi/
-├── api/      API Node.js (Express + MySQL) — tontines, paiements MOKO, bot WhatsApp, rappels
+├── api/      API Node.js (Express + MySQL) — tontines, paiements AWA Network, grand livre, bot WhatsApp, rappels
 └── mobile/   App native iOS + Android (Expo / React Native)
 ```
 
@@ -94,7 +94,7 @@ npx eas-cli@latest submit --platform android  # vers Google Play (piste interne)
 ## Développement
 
 ```bash
-# API (tests : 23 scénarios, base SQLite en mémoire, faux MOKO et faux WhatsApp)
+# API (tests : 38 scénarios, base SQLite en mémoire, faux fournisseur et faux WhatsApp)
 cd api && npm install && npm test
 DB_CLIENT=better-sqlite3 npm start        # http://localhost:3000, mode simulation
 
@@ -106,4 +106,4 @@ npm run typecheck && npm run lint
 
 ## Point juridique
 
-Faire valider par un juriste (et au besoin auprès de la BCC) le modèle de collecte : avec les versements automatiques, les fonds transitent quelques heures par le compte marchand MOKO d’Ikobi. Le texte de `mobile/src/app/legal.tsx` est une base à faire relire.
+Faire valider par un juriste (et au besoin auprès de la BCC) le modèle de collecte : les fonds transitent par le compte marchand AWA d’Ikobi entre la collecte et le versement. Le texte de `mobile/src/app/legal.tsx` est une base à faire relire.
