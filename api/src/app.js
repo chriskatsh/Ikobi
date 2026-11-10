@@ -54,7 +54,7 @@ function errorHandler(logger) {
       return res.status(400).json({ error: { code: 'bad_json', message: 'JSON invalide' } });
     }
     logger.error?.({ err: err?.message, stack: err?.stack }, 'Erreur serveur');
-    return res.status(500).json({ error: { code: 'server_error', message: 'Erreur interne. Réessaie dans un instant.' } });
+    return res.status(500).json({ error: { code: 'server_error', message: 'Erreur interne. Réessayez dans un instant.' } });
   };
 }
 

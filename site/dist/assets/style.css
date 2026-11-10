@@ -337,3 +337,17 @@ pre code { background: none; padding: 0; font-size: inherit; }
 @media (max-width: 860px) { .hero .wrap.u-hero-api { grid-template-columns: 1fr; } }
 .steps.steps-3 { grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 860px) { .steps.steps-3 { grid-template-columns: 1fr; } .steps.steps-3 li { padding-left: 0; border-left: 0; } }
+
+/* Vitrine de l'application */
+.showcase { overflow: hidden; }
+.phones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(1rem, 3vw, 2.5rem); align-items: start; max-width: 60rem; margin-inline: auto; }
+.phone { margin: 0; display: grid; gap: 1rem; justify-items: center; }
+.phone img { width: 100%; max-width: 17rem; height: auto; border-radius: 2.2rem; border: 6px solid #1b2236; box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.7), 0 0 0 1px #2a3350; background: var(--night); }
+.phone figcaption { color: var(--muted); font-size: var(--step--1); text-align: center; max-width: 16rem; }
+.phone-raised { transform: translateY(-1.5rem); }
+.center { text-align: center; margin: 2rem auto 0; }
+@media (max-width: 760px) {
+  .phones { grid-template-columns: repeat(3, 72%); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 1rem; margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); }
+  .phone { scroll-snap-align: center; }
+  .phone-raised { transform: none; }
+}

@@ -1,5 +1,10 @@
 # iKobi — Journal des changements
 
+## Refonte UX/UI (10/11/2026)
+- Audit UX (`docs/IKOBI_UX_AUDIT.md`) : 14 constats priorisés, personas, principes.
+- App : polices de la marque, icônes, carte « prochaine action », création en 3 étapes avec montants suggérés et dates rapides, aperçu avant adhésion (`GET /v1/groups/preview`), page tontine à onglets avec action fixe, paiement avec grille d'opérateurs, attente guidée et reçu partageable, squelettes, erreurs avec « Réessayer », toasts, vouvoiement.
+- Site : vitrine de l'application avec captures réelles.
+
 ## V3.0 — Phase 1 (branche `v3-phase1`, en attente de validation)
 ### Ajouté
 - Grand livre en partie double (`ledger_journals`, `ledger_entries`), balance de vérification.

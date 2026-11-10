@@ -133,6 +133,19 @@ describe('parcours complet d\'une tontine', () => {
     groupId = r.body.id;
   });
 
+  test('aperçu avant adhésion, sans données personnelles', async () => {
+    const g = await t.agent.get(`/v1/groups/${groupId}`).set(a.auth);
+    const p = await t.agent.get(`/v1/groups/preview?code=${g.body.inviteCode.toLowerCase()}`).set(b.auth);
+    assert.equal(p.status, 200);
+    assert.equal(p.body.name, 'Likelemba Famille');
+    assert.equal(p.body.organizer, 'Aline');
+    assert.equal(p.body.potWhenFull, 100);
+    assert.equal(p.body.canJoin, true);
+    assert.ok(!JSON.stringify(p.body).includes('243'));
+    const bad = await t.agent.get('/v1/groups/preview?code=ZZZZZZ').set(b.auth);
+    assert.equal(bad.status, 404);
+  });
+
   test('les membres rejoignent avec le code, le groupe se remplit', async () => {
     const g = await t.agent.get(`/v1/groups/${groupId}`).set(a.auth);
     const r1 = await t.agent.post('/v1/groups/join').set(b.auth).send({ code: g.body.inviteCode.toLowerCase(), payoutPhone: '0971234567' });

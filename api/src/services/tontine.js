@@ -41,7 +41,7 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
     const g = await db('groups').where({ id: groupId }).first();
     if (!g) throw notFound('Groupe introuvable');
     const m = await membership(groupId, userId);
-    if (!m) throw forbidden("Tu n'es pas membre de ce groupe");
+    if (!m) throw forbidden("Vous n'êtes pas membre de ce groupe");
     return { group: g, member: m };
   }
 
@@ -96,6 +96,30 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
       });
       return groupId;
     });
+  }
+
+  // Aperçu avant adhésion : ce à quoi le membre s'engage (aucune donnée personnelle des autres membres).
+  async function previewByCode(userId, code) {
+    const g = await db('groups').where({ invite_code: String(code || '').trim().toUpperCase() }).first();
+    if (!g) throw notFound("Code d'invitation introuvable. Vérifiez les 6 caractères.");
+    const n = await memberCount(g.id);
+    const organizer = await db('users').where({ id: g.created_by }).first();
+    const already = await membership(g.id, userId);
+    return {
+      id: g.id,
+      name: g.name,
+      amount: fromMinor(Number(g.amount_minor)),
+      currency: g.currency,
+      frequency: g.frequency,
+      startDate: g.start_date,
+      members: n,
+      maxMembers: g.max_members,
+      potWhenFull: fromMinor(Number(g.amount_minor) * (g.max_members - 1)),
+      organizer: (organizer?.name || 'Organisateur').split(' ')[0],
+      status: g.status,
+      canJoin: !already && g.status === 'forming' && n < g.max_members,
+      alreadyMember: Boolean(already),
+    };
   }
 
   async function joinGroup(userId, { code, payoutPhone, payoutMethod }) {
@@ -326,7 +350,7 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
     if (group.status !== 'active') throw conflict('not_active', "La tontine n'a pas encore démarré");
     const cycle = await currentCycle(groupId);
     if (!cycle || cycle.status !== 'open') throw conflict('no_open_cycle', "Aucune cotisation n'est attendue pour le moment");
-    if (cycle.beneficiary_id === userId) throw conflict('is_beneficiary', "Tu es le bénéficiaire de ce tour : tu n'as rien à payer");
+    if (cycle.beneficiary_id === userId) throw conflict('is_beneficiary', "Vous êtes le bénéficiaire de ce tour : vous n'avez rien à payer");
 
     const payPhone = normalizePhone(phone);
     if (!payPhone) throw badRequest('invalid_phone', 'Numéro Mobile Money invalide');
@@ -335,7 +359,7 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
     const { name: providerName, client: provider } = payments.route(group.country, payMethod, group.currency);
 
     const existing = await db('contributions').where({ cycle_id: cycle.id, user_id: userId }).whereIn('status', ['success', 'pending']).orderBy('id', 'desc');
-    if (existing.some((c) => c.status === 'success')) throw conflict('already_paid', 'Tu as déjà payé ce tour');
+    if (existing.some((c) => c.status === 'success')) throw conflict('already_paid', 'Vous avez déjà payé ce tour');
     const pending = existing.find((c) => c.status === 'pending');
     if (pending) {
       const age = Date.now() - toMs(pending.created_at);
@@ -344,10 +368,10 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
       const v = await payments.get(pending.provider).verify(pending.reference);
       if (v.status !== 'pending') {
         await applyContributionResult(pending.reference, v.status, v.providerTxId, v.description, 'verify');
-        if (v.status === 'success') throw conflict('already_paid', 'Tu as déjà payé ce tour');
+        if (v.status === 'success') throw conflict('already_paid', 'Vous avez déjà payé ce tour');
       } else {
         // On ne marque PAS « échoué » un paiement peut-être débité : on bloque et on laisse la réconciliation trancher.
-        throw conflict('payment_unconfirmed', 'Ton paiement précédent est toujours en attente de confirmation. Réessaie dans quelques minutes.');
+        throw conflict('payment_unconfirmed', 'Votre paiement précédent attend encore la confirmation de l’opérateur. Réessayez dans quelques minutes.');
       }
     }
 
@@ -441,7 +465,7 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
     } else {
       await notifier.user(c.user_id, {
         title: 'Paiement non abouti',
-        body: `Ta cotisation de ${amount} pour « ${group.name} » n'a pas abouti. Réessaie.`,
+        body: `Votre cotisation de ${amount} pour « ${group.name} » n'a pas abouti. Réessayez.`,
         data: { groupId: group.id },
         whatsappText: `❌ Ta cotisation de *${amount}* pour *${group.name}* n'a pas abouti. Écris *cotiser* pour réessayer.`,
       });
@@ -463,7 +487,7 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
     const pot = formatMoney(potMinor(group, n), group.currency);
     await notifier.user(cycle.beneficiary_id, {
       title: 'Toutes les cotisations sont collectées',
-      body: `« ${group.name} » : ${pot} collectés pour toi. Le versement suit sa validation.`,
+      body: `« ${group.name} » : ${pot} collectés pour vous. Le versement suit sa validation.`,
       data: { groupId: group.id },
       whatsappText: `📥 Tous les membres de *${group.name}* ont cotisé (${pot}). Le versement te sera envoyé après validation.`,
     });
@@ -531,8 +555,8 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
     if (req.status !== 'requested') throw conflict('already_reviewed', 'Demande déjà traitée');
     const cycle = await db('cycles').where({ id: req.cycle_id }).first();
     // Séparation des tâches : on ne valide ni sa propre demande, ni un versement dont on est bénéficiaire.
-    if (req.requested_by === reviewerId) throw forbidden('Tu ne peux pas valider ta propre demande');
-    if (cycle.beneficiary_id === reviewerId) throw forbidden('Tu ne peux pas valider un versement dont tu es bénéficiaire');
+    if (req.requested_by === reviewerId) throw forbidden('Vous ne pouvez pas valider votre propre demande');
+    if (cycle.beneficiary_id === reviewerId) throw forbidden('Vous ne pouvez pas valider un versement dont vous êtes bénéficiaire');
     const group = await db('groups').where({ id: cycle.group_id }).first();
 
     if (decision === 'reject') {
@@ -648,7 +672,7 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
     }
     await notifier.user(p.user_id, {
       title: '💰 Cagnotte versée',
-      body: `${net} ont été envoyés sur ton Mobile Money (« ${group.name} »).`,
+      body: `${net} ont été envoyés sur votre Mobile Money (« ${group.name} »).`,
       data: { groupId: group.id },
       whatsappText: `💰 *${net}* ont été envoyés sur ton Mobile Money pour *${group.name}*.`,
     });
@@ -789,7 +813,7 @@ export function createTontineService({ db, payments, ledger, fees, audit, notifi
   }
 
   return {
-    createGroup, joinGroup, startGroup, groupDetail, myGroups, duesForUser,
+    createGroup, previewByCode, joinGroup, startGroup, groupDetail, myGroups, duesForUser,
     quoteContribution, initiateContribution, applyContributionResult, applyPayoutResult, applyProviderResult,
     requestPayout, reviewPayout, payoutPreconditions, settle, reconciliation, payoutQueue,
     contributionStatus, history, currentCycle, memberCount, paidUserIds, potMinor,

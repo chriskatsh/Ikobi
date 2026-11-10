@@ -167,6 +167,17 @@ pages['/'] = {
   ${circleSvg()}
 </div></section>
 
+<section class="showcase"><div class="wrap">
+  <div class="section-head"><h2>Tout le groupe, dans votre poche.</h2>
+  <p class="lead">Ce que vous devez payer et quand, l’état de chaque cagnotte, un reçu pour chaque paiement. Pensé pour être compris d’un coup d’œil.</p></div>
+  <div class="phones">
+    <figure class="phone"><img src="/assets/img/app-accueil.webp" width="390" height="844" alt="Écran d’accueil : prochaine cotisation de 20 000 FC à payer pour Tontine Bureau, avec le bouton Cotiser maintenant" loading="lazy" decoding="async"><figcaption>La prochaine action, toujours en haut</figcaption></figure>
+    <figure class="phone phone-raised"><img src="/assets/img/app-paiement.webp" width="390" height="844" alt="Écran de paiement : choix de l’opérateur et récapitulatif cotisation, frais et total" loading="lazy" decoding="async"><figcaption>Les frais affichés avant de payer</figcaption></figure>
+    <figure class="phone"><img src="/assets/img/app-recu.webp" width="390" height="844" alt="Reçu : cotisation reçue, montant, frais, total payé et référence" loading="lazy" decoding="async"><figcaption>Un reçu pour chaque paiement</figcaption></figure>
+  </div>
+  <p class="small muted center">Aperçus de l’application. Noms et montants d’exemple.</p>
+</div></section>
+
 <section><div class="wrap">
   <div class="section-head"><h2>Quatre gestes, du premier membre à la dernière cagnotte.</h2></div>
   <ol class="steps">
@@ -762,6 +773,8 @@ function writeTree(out, map, { nav, footer, canonicalBase, brandSuffix }) {
   copyFileSync(join(SRC, 'style.css'), join(out, 'assets', 'style.css'));
   copyFileSync(join(SRC, 'main.js'), join(out, 'assets', 'main.js'));
   for (const f of readdirSync(join(SRC, 'fonts'))) copyFileSync(join(SRC, 'fonts', f), join(out, 'assets', 'fonts', f));
+  mkdirSync(join(out, 'assets', 'img'), { recursive: true });
+  for (const f of readdirSync(join(SRC, 'img'))) copyFileSync(join(SRC, 'img', f), join(out, 'assets', 'img', f));
   copyFileSync(join(SRC, 'apple-touch-icon.png'), join(out, 'apple-touch-icon.png'));
   writeFileSync(join(out, 'favicon.svg'), logo(64).replace('width="64" height="64" aria-hidden="true"', 'xmlns="http://www.w3.org/2000/svg"'));
   for (const [path, p] of Object.entries(map)) {
