@@ -762,6 +762,7 @@ function writeTree(out, map, { nav, footer, canonicalBase, brandSuffix }) {
   copyFileSync(join(SRC, 'style.css'), join(out, 'assets', 'style.css'));
   copyFileSync(join(SRC, 'main.js'), join(out, 'assets', 'main.js'));
   for (const f of readdirSync(join(SRC, 'fonts'))) copyFileSync(join(SRC, 'fonts', f), join(out, 'assets', 'fonts', f));
+  copyFileSync(join(SRC, 'apple-touch-icon.png'), join(out, 'apple-touch-icon.png'));
   writeFileSync(join(out, 'favicon.svg'), logo(64).replace('width="64" height="64" aria-hidden="true"', 'xmlns="http://www.w3.org/2000/svg"'));
   for (const [path, p] of Object.entries(map)) {
     let html = layout({ ...p, path, nav, footer, canonicalBase, brandSuffix });
@@ -772,6 +773,7 @@ function writeTree(out, map, { nav, footer, canonicalBase, brandSuffix }) {
 }
 
 writeTree(SITE_OUT, pages, { nav: siteNav, footer: siteFooter, canonicalBase: SITE_URL, brandSuffix: '' });
+copyFileSync(join(SRC, 'og-site.png'), join(SITE_OUT, 'og.png'));
 writeFileSync(join(SITE_OUT, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml\n`);
 writeFileSync(join(SITE_OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${Object.keys(pages).filter((p) => p !== '/404').map((p) => `  <url><loc>${SITE_URL}${p === '/' ? '/' : p}</loc><lastmod>2026-11-10</lastmod></url>`).join('\n')}\n</urlset>\n`);
 // Apache (Hostinger) : URL sans .html, anciennes routes de l'app Horizons redirigées, en-têtes de sécurité.
@@ -806,6 +808,7 @@ RewriteRule ^(.+?)/?$ $1.html [L]
 `);
 
 writeTree(PORTAL_OUT, portalPages, { nav: portalNav, footer: portalFooter, canonicalBase: API_URL, brandSuffix: '<small>API</small>' });
+copyFileSync(join(SRC, 'og-api.png'), join(PORTAL_OUT, 'og.png'));
 writeFileSync(join(PORTAL_OUT, 'openapi.json'), JSON.stringify(openapi, null, 2));
 writeFileSync(join(PORTAL_OUT, 'robots.txt'), `User-agent: *\nAllow: /\nDisallow: /v1/\nDisallow: /partner/\nDisallow: /webhooks/\n`);
 console.log(`Site : ${Object.keys(pages).length} pages → ${SITE_OUT}\nPortail : ${Object.keys(portalPages).length} pages → ${PORTAL_OUT}`);
