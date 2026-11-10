@@ -25,6 +25,11 @@ export function createApp({ db, config, moko, whatsapp, services, logger = conso
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
   app.use(helmet());
+  // Données personnelles et statuts de paiement : jamais en cache (CDN Hostinger compris).
+  app.use((_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
   app.use(cors());
   // Le corps brut est conservé pour vérifier les signatures (Meta, MOKO).
   app.use(express.json({ limit: '200kb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
