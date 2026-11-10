@@ -1,24 +1,29 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
+import { Text, View } from 'react-native';
 import { api, ApiError } from '@/lib/api';
-import { normalizePhone } from '@/lib/format';
-import { Button, ErrorBox, Field, H1, Muted, Screen } from '@/ui';
+import { detectOperator } from '@/lib/format';
+import { OPERATOR_INFO } from '@/operators';
+import { ActionBar, Button, ErrorBox, H1, Muted, PhoneInput, Screen } from '@/ui';
+import { C, F, S } from '@/theme';
 
 export default function Login() {
-  const [phone, setPhone] = useState('');
+  const [digits, setDigits] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const valid = digits.length === 9;
+  const op = valid ? detectOperator('243' + digits) : null;
 
   async function submit() {
-    const p = normalizePhone(phone);
-    if (!p) {
-      setError('Numéro invalide. Exemple : 0812345678');
+    if (!valid) {
+      setError('Le numéro contient 9 chiffres après +243. Exemple : 81 234 5678');
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const r = await api<{ phone: string; debugCode?: string }>('/auth/otp/request', { body: { phone: p } });
+      const r = await api<{ phone: string; debugCode?: string }>('/auth/otp/request', { body: { phone: '243' + digits } });
       router.push({ pathname: '/verify', params: { phone: r.phone, debug: r.debugCode ?? '' } });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Erreur inattendue');
@@ -28,23 +33,24 @@ export default function Login() {
   }
 
   return (
-    <Screen>
-      <H1>Ton numéro</H1>
-      <Muted>Nous t’envoyons un code de connexion sur WhatsApp. Pas de mot de passe à retenir.</Muted>
-      <Field
-        label="Numéro de téléphone"
-        placeholder="081 234 5678"
-        keyboardType="phone-pad"
-        autoComplete="tel"
-        textContentType="telephoneNumber"
-        value={phone}
-        onChangeText={setPhone}
-        onSubmitEditing={submit}
-        autoFocus
-        hint="Numéro de la RDC (+243)"
-      />
-      <ErrorBox message={error} />
-      <Button title="Recevoir mon code" onPress={submit} loading={loading} />
+    <Screen
+      footer={
+        <ActionBar>
+          <Button title="Recevoir mon code" onPress={submit} loading={loading} disabled={!valid} icon={<Ionicons name="logo-whatsapp" size={18} color="#04140F" />} />
+        </ActionBar>
+      }>
+      <View style={{ gap: S.sm, marginTop: S.sm }}>
+        <H1>Votre numéro</H1>
+        <Muted>Nous vous envoyons un code de connexion sur WhatsApp. Aucun mot de passe à retenir.</Muted>
+      </View>
+      <PhoneInput label="Numéro de téléphone" value={digits} onChange={(d) => { setDigits(d); setError(null); }} error={error} autoFocus />
+      {op ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Ionicons name="checkmark-circle" size={16} color={C.green} />
+          <Text style={{ color: C.muted, fontFamily: F.bodyM }}>{OPERATOR_INFO[op].label}</Text>
+        </View>
+      ) : null}
+      <ErrorBox message={error && !error.startsWith('Le numéro') ? error : null} />
     </Screen>
   );
 }

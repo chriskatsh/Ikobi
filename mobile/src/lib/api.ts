@@ -34,7 +34,7 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
       body: opts.body ? JSON.stringify(opts.body) : undefined,
     });
   } catch {
-    throw new ApiError(0, 'network', 'Pas de connexion internet. Vérifie ton réseau et réessaie.');
+    throw new ApiError(0, 'network', 'Pas de connexion internet. Vérifiez votre réseau et réessayez.');
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

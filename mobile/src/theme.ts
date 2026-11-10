@@ -15,6 +15,9 @@ export const C = {
   red: '#FF6B6B',
   redDim: '#3A1E22',
   blue: '#6CA8FF',
+  // Or de la cagnotte : réservé au moment où l'on reçoit.
+  pot: '#F2B441',
+  potDim: '#3A2F14',
 } as const;
 
 export const R = { sm: 10, md: 16, lg: 24, pill: 999 } as const;
@@ -26,3 +29,14 @@ export const OPERATORS: Record<string, { label: string; color: string }> = {
   airtel: { label: 'Airtel Money', color: '#ED1C24' },
   africell: { label: 'Afrimoney', color: '#7B2CBF' },
 };
+
+// Typographie : Bricolage Grotesque (titres, montants) + Instrument Sans (texte), comme sur ikobi.app.
+export const F = {
+  display: 'BricolageGrotesque_700Bold',
+  displayX: 'BricolageGrotesque_800ExtraBold',
+  displayS: 'BricolageGrotesque_600SemiBold',
+  body: 'InstrumentSans_400Regular',
+  bodyM: 'InstrumentSans_500Medium',
+  bodyS: 'InstrumentSans_600SemiBold',
+  bodyB: 'InstrumentSans_700Bold',
+} as const;

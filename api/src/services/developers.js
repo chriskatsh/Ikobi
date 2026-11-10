@@ -18,7 +18,7 @@ export function createDeveloperService({ db, audit, config }) {
     // Limite simple : 3 demandes par e-mail et par jour.
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const recent = await db('api_key_requests').where({ email: input.email.toLowerCase() }).andWhere('created_at', '>', since).count({ c: '*' }).first();
-    if (Number(recent.c) >= 3) throw new HttpError(429, 'too_many_requests', 'Tu as déjà envoyé plusieurs demandes aujourd’hui. Nous revenons vers toi par e-mail.');
+    if (Number(recent.c) >= 3) throw new HttpError(429, 'too_many_requests', 'Vous avez déjà envoyé plusieurs demandes aujourd’hui. Nous revenons vers vous par e-mail.');
     const id = await insertId(db('api_key_requests').insert({
       org_name: input.orgName,
       org_type: input.orgType,

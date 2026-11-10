@@ -65,7 +65,7 @@ export function apiRoutes({ auth, tontine, payments, db, config }) {
     const uid = req.user.id;
     const active = await db('memberships as m').join('groups as g', 'g.id', 'm.group_id').where('m.user_id', uid).andWhere('g.status', 'active').first();
     if (active) {
-      return res.status(409).json({ error: { code: 'active_tontine', message: 'Tu fais partie d’une tontine en cours. Tu pourras supprimer ton compte quand elle sera terminée.' } });
+      return res.status(409).json({ error: { code: 'active_tontine', message: 'Vous faites partie d’une tontine en cours. Vous pourrez supprimer votre compte quand elle sera terminée.' } });
     }
     await db.transaction(async (trx) => {
       const forming = await trx('memberships as m').join('groups as g', 'g.id', 'm.group_id').where('m.user_id', uid).andWhere('g.status', 'forming').select('g.id', 'm.role');
@@ -89,6 +89,10 @@ export function apiRoutes({ auth, tontine, payments, db, config }) {
     const b = parse(createGroupSchema, req.body);
     const id = await tontine.createGroup(req.user.id, { ...b, amountMinor: toMinor(b.amount) });
     res.status(201).json(await tontine.groupDetail(req.user.id, id));
+  }));
+
+  r.get('/groups/preview', needAuth, ah(async (req, res) => {
+    res.json(await tontine.previewByCode(req.user.id, String(req.query.code || '')));
   }));
 
   r.post('/groups/join', needAuth, ah(async (req, res) => {

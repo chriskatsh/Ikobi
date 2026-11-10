@@ -1,31 +1,49 @@
 # iKobi — Design system
 
-Source : `mobile/src/theme.ts`, `mobile/src/ui/index.tsx`, `mobile/src/operators.tsx`.
+Sources : `mobile/src/theme.ts`, `mobile/src/ui/index.tsx`, `mobile/src/ui/kit.tsx`, `mobile/src/operators.tsx` (app) ; `site/src/style.css` (ikobi.app et api.ikobi.app). Audit et principes : `docs/IKOBI_UX_AUDIT.md`.
 
-## Couleurs
-| Jeton | Valeur | Usage |
+## Identité
+- **Fond** bleu nuit `#090C15`, surfaces `#121726` / `#1A2133`, bordures `#262F45`.
+- **Accent** vert `#2BD9A0` (actions, confirmations). Nom technique `C.gold` conservé dans l'app.
+- **Or de la cagnotte** `#F2B441` : réservé au moment où l'on reçoit (carte « votre tour », bénéficiaire).
+- **Rouge** `#FF6B6B` : retard, échec, suppression.
+- Le même cercle (6 membres autour de la cagnotte) sert de logo, d'icône d'app et d'animation du site.
+
+## Typographie (app et web)
+| Rôle | Police | Usage |
 |---|---|---|
-| `bg` | `#090C15` | Fond (bleu nuit profond, couleur historique de la marque) |
-| `surface` / `surface2` | `#121726` / `#1A2133` | Cartes, champs |
-| `border` | `#262F45` | Séparateurs |
-| `text` / `muted` / `faint` | `#F4F6FB` / `#9AA3B8` / `#5F6880` | Texte |
-| `gold` (accent) | `#2BD9A0` | **Accent principal vert** : boutons, montants clés (nom technique conservé) |
-| `green` | `#2BD9A0` | Succès |
-| `red` | `#FF6B6B` | Erreur, retard |
+| Titres, montants | Bricolage Grotesque 700/800 | H1 30, montants héros 44–48, titres de carte 18 |
+| Texte | Instrument Sans 400/500/600/700 | Corps 15–16, libellés 14, mentions 12–13 |
+| Code (web) | JetBrains Mono | Documentation API |
 
-## Typographie
-Police système ; titres 28/800, sous-titres 19/700, texte 16, secondaire 15, étiquettes 13 majuscules.
+## Ton
+Vouvoiement dans l'app, sur le site et dans les messages de l'API. Tutoiement réservé à l'assistant WhatsApp (conversationnel). Phrases courtes, verbes d'action, aucune promesse de garantie.
 
-## Composants
-`Screen`, `Card`, `Button` (primary, secondary, ghost, danger, whatsapp), `Field`, `Choice` (radio), `Pill` (neutral, green, gold, red), `Progress`, `ErrorBox`, `Loading`, `OperatorBadge`, `AcceptedOperators`.
+## Composants (app)
+| Composant | Rôle |
+|---|---|
+| `Screen` + `ActionBar` | Écran défilant ; l'action principale reste fixée en bas |
+| `Button` | primary (vert), secondary, ghost, danger, whatsapp — 54 px, pilule |
+| `Card`, `KV` | Regroupement ; lignes libellé / valeur alignées |
+| `Segmented` | Onglets (Tour, Membres, Calendrier, Règles ; Cotisations, Versements) |
+| `PhoneInput` | Préfixe +243 fixe, groupes « 81 234 5678 », opérateur détecté |
+| `AmountInput`, `Chip` | Montant géant avec séparateur de milliers, montants suggérés |
+| `Stepper`, `Steps` | Compteur ±, progression d'un assistant |
+| `CodeInput` | 6 cases, collage et remplissage automatique, validation au 6e caractère |
+| `Avatar` | Initiales, couleur stable par personne |
+| `Pill`, `Progress` | Statut (à payer, payé, reçoit, en attente) ; progression du tour |
+| `SkeletonCard`, `ErrorState`, `EmptyState` | Chargement, erreur avec « Réessayer », état vide avec action |
+| `useToast` | Retour bref (code copié, demande envoyée) + vibration + annonce lecteur d'écran |
+| `OperatorBadge` | Badges M-Pesa, Orange Money, Airtel Money, Afrimoney |
 
 ## Règles UX
-- Montants lisibles, devise toujours affichée (`20 000 FC`).
-- Avant tout paiement : récapitulatif principal / frais / total.
-- États séparés et nommés : prévu, collecté, réglé, versé ; en attente, réussi, échoué.
-- Chaque parcours critique : chargement, succès, échec, vide, validation, action suivante.
-- Pas de promesse de sécurité absolue ni de garantie de versement.
-- Cibles tactiles ≥ 44 px, rôles d'accessibilité sur boutons, radios et barres de progression.
+1. Une seule prochaine action par écran, toujours visible.
+2. Argent d'abord : montant, échéance et statut en premier, devise toujours affichée.
+3. Statuts nommés partout de la même façon : à payer, en attente, payé, reçoit ; prévu, collecté, réglé, versé.
+4. Montrer avant d'engager : aperçu avant adhésion, récapitulatif avant création et avant paiement.
+5. Chaque erreur dit quoi faire et propose une action.
+6. Animation seulement pour confirmer (pulsation d'attente, coche de succès, toast) ; mouvement réduit respecté.
+7. Cibles tactiles ≥ 44 px, rôles d'accessibilité (bouton, onglet, radio, réglable), annonces vocales des résultats de paiement.
 
-## À faire
-Logos officiels des opérateurs, mode clair, tailles dynamiques, tests aux largeurs 320 / 375 / 390 / 430 px et tablette.
+## Vérifications
+Parcours complet testé dans l'aperçu à 390 px, sans débordement à 360 px ; site sans débordement à 320 px.

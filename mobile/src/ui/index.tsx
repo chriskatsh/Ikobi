@@ -17,18 +17,20 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { C, R, S } from '@/theme';
+import { C, F, R, S } from '@/theme';
 
 export function Screen({
   children,
   scroll = true,
   refreshControl,
   edges = ['bottom'],
+  footer,
 }: {
   children: ReactNode;
   scroll?: boolean;
   refreshControl?: React.ReactElement<RefreshControlProps>;
   edges?: ('top' | 'bottom')[];
+  footer?: ReactNode;
 }) {
   const content = scroll ? (
     <ScrollView
@@ -42,9 +44,10 @@ export function Screen({
     <View style={[st.scroll, { flex: 1 }]}>{children}</View>
   );
   return (
-    <SafeAreaView style={st.screen} edges={edges}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView style={st.screen} edges={footer ? edges.filter((e) => e !== 'bottom') : edges}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
         {content}
+        {footer}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -141,7 +144,7 @@ export function Pill({ text, tone = 'neutral' }: { text: string; tone?: 'neutral
   }[tone];
   return (
     <View style={[st.pill, { backgroundColor: m[0] }]}>
-      <Text style={{ color: m[1], fontSize: 12, fontWeight: '700' }}>{text}</Text>
+      <Text style={{ color: m[1], fontSize: 12, fontFamily: F.bodyB }}>{text}</Text>
     </View>
   );
 }
@@ -193,7 +196,7 @@ export function Choice({
       style={[st.choice, selected && { borderColor: C.gold, backgroundColor: C.goldDim }]}>
       {left}
       <View style={{ flex: 1 }}>
-        <T style={{ fontWeight: '600' }}>{title}</T>
+        <T style={{ fontFamily: F.bodyS }}>{title}</T>
         {subtitle ? <Muted style={{ fontSize: 13 }}>{subtitle}</Muted> : null}
       </View>
       <View style={[st.radio, selected && { borderColor: C.gold }]}>{selected ? <View style={st.radioDot} /> : null}</View>
@@ -204,17 +207,17 @@ export function Choice({
 export const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   scroll: { padding: S.md, gap: S.md, paddingBottom: S.xl * 2 },
-  h1: { color: C.text, fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  h2: { color: C.text, fontSize: 19, fontWeight: '700' },
-  t: { color: C.text, fontSize: 16, lineHeight: 22 },
-  muted: { color: C.muted, fontSize: 15, lineHeight: 21 },
-  label: { color: C.muted, fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6 },
-  card: { backgroundColor: C.surface, borderRadius: R.md, padding: S.md, gap: S.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border },
-  btn: { minHeight: 52, borderRadius: R.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: S.md, borderWidth: 1 },
-  btnText: { fontSize: 16, fontWeight: '700' },
+  h1: { color: C.text, fontSize: 30, fontFamily: F.displayX, letterSpacing: -0.8, lineHeight: 34 },
+  h2: { color: C.text, fontSize: 19, fontFamily: F.display, letterSpacing: -0.3 },
+  t: { color: C.text, fontSize: 16, lineHeight: 22, fontFamily: F.body },
+  muted: { color: C.muted, fontSize: 15, lineHeight: 21, fontFamily: F.body },
+  label: { color: C.muted, fontSize: 14, fontFamily: F.bodyS },
+  card: { backgroundColor: C.surface, borderRadius: R.lg, padding: S.lg - 4, gap: S.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border },
+  btn: { minHeight: 54, borderRadius: R.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: S.lg, borderWidth: 1 },
+  btnText: { fontSize: 16, fontFamily: F.bodyB },
   row: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
-  input: { backgroundColor: C.surface, color: C.text, borderRadius: R.sm, borderWidth: 1, borderColor: C.border, paddingHorizontal: S.md, minHeight: 52, fontSize: 17 },
-  error: { color: C.red, fontSize: 13 },
+  input: { backgroundColor: C.surface, color: C.text, borderRadius: R.sm, borderWidth: 1, borderColor: C.border, paddingHorizontal: S.md, minHeight: 54, fontSize: 17, fontFamily: F.bodyM },
+  error: { color: C.red, fontSize: 13, fontFamily: F.bodyM },
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill, alignSelf: 'flex-start' },
   track: { height: 8, backgroundColor: C.surface2, borderRadius: R.pill, overflow: 'hidden' },
   fill: { height: 8, backgroundColor: C.green, borderRadius: R.pill },
@@ -223,3 +226,5 @@ export const st = StyleSheet.create({
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.faint, alignItems: 'center', justifyContent: 'center' },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.gold },
 });
+
+export * from './kit';

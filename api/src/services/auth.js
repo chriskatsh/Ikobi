@@ -20,7 +20,7 @@ export function createAuthService({ db, whatsapp, config, audit }) {
     const since = new Date(Date.now() - 60 * 60 * 1000);
     const recent = await db('otp_codes').where({ phone }).andWhere('created_at', '>', since).count({ c: '*' }).first();
     if (Number(recent.c) >= MAX_CODES_PER_HOUR) {
-      throw new HttpError(429, 'too_many_codes', 'Trop de codes demandés. Réessaie dans une heure.');
+      throw new HttpError(429, 'too_many_codes', 'Trop de codes demandés. Réessayez dans une heure.');
     }
     const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
     await db('otp_codes').insert({ phone, code_hash: hash(phone, code), expires_at: new Date(Date.now() + OTP_TTL_MS), created_at: new Date() });
@@ -32,8 +32,8 @@ export function createAuthService({ db, whatsapp, config, audit }) {
     const phone = normalizePhone(rawPhone);
     if (!phone) throw badRequest('invalid_phone', 'Numéro invalide');
     const row = await db('otp_codes').where({ phone }).whereNull('used_at').orderBy('id', 'desc').first();
-    if (!row || toMs(row.expires_at) < Date.now()) throw unauthorized('Code expiré. Demande un nouveau code.');
-    if (row.attempts >= MAX_ATTEMPTS) throw unauthorized('Trop de tentatives. Demande un nouveau code.');
+    if (!row || toMs(row.expires_at) < Date.now()) throw unauthorized('Code expiré. Demandez un nouveau code.');
+    if (row.attempts >= MAX_ATTEMPTS) throw unauthorized('Trop de tentatives. Demandez un nouveau code.');
     const ok = crypto.timingSafeEqual(Buffer.from(hash(phone, String(code))), Buffer.from(row.code_hash));
     if (!ok) {
       await db('otp_codes').where({ id: row.id }).increment('attempts', 1);
@@ -68,7 +68,7 @@ export function createAuthService({ db, whatsapp, config, audit }) {
         try {
           payload = jwt.verify(t, config.jwtSecret);
         } catch {
-          throw unauthorized('Session expirée. Reconnecte-toi.');
+          throw unauthorized('Session expirée. Reconnectez-vous.');
         }
         const user = await db('users').where({ id: payload.sub }).first();
         if (!user || String(user.phone).startsWith('del-')) throw unauthorized();

@@ -9,13 +9,13 @@ const requestSchema = z.object({
   orgName: z.string().trim().min(2, 'Nom de l’organisation trop court').max(120),
   orgType: z.enum(ORG_TYPES),
   country: z.string().trim().length(2, 'Pays invalide').transform((s) => s.toUpperCase()),
-  contactName: z.string().trim().min(2, 'Indique le nom du contact').max(80),
+  contactName: z.string().trim().min(2, 'Indiquez le nom du contact').max(80),
   email: z.string().trim().email('E-mail invalide').max(160),
   phone: z.string().trim().max(20).optional().or(z.literal('')),
   website: z.string().trim().url('Adresse du site invalide').max(200).optional().or(z.literal('')),
-  useCase: z.string().trim().min(30, 'Décris ton projet en quelques phrases (30 caractères minimum)').max(2000),
+  useCase: z.string().trim().min(30, 'Décrivez votre projet en quelques phrases (30 caractères minimum)').max(2000),
   volume: z.enum(['<100', '100-1000', '1000-10000', '>10000']).optional().or(z.literal('')),
-  consent: z.literal(true, { error: 'Coche la case pour accepter le traitement de ta demande' }),
+  consent: z.literal(true, { error: 'Cochez la case pour accepter le traitement de votre demande' }),
   company: z.string().max(0).optional(), // piège à robots : doit rester vide
 });
 
