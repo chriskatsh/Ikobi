@@ -3,10 +3,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ah, parse } from '../lib/errors.js';
 import { requireRole } from '../services/auth.js';
+import { developerOpsRoutes } from './developers.js';
 
-export function opsRoutes({ auth, tontine, audit, db }) {
+export function opsRoutes({ auth, tontine, audit, developers, db }) {
   const r = Router();
   r.use(auth.middleware());
+  if (developers) r.use(developerOpsRoutes({ developers, requireRole }));
   const finance = requireRole('finance', 'admin');
 
   r.get('/reconciliation', requireRole('ops', 'finance', 'compliance', 'admin'), ah(async (_req, res) => res.json(await tontine.reconciliation())));

@@ -1,0 +1,247 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "iKobi API",
+    "version": "1.0.0-beta",
+    "description": "API partenaire (statistiques agrégées) et routes publiques du portail iKobi.",
+    "contact": {
+      "email": "contact@ikobi.app"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.ikobi.app"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "partnerKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Clé API partenaire ikb_live_…"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Insights": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "communities": {
+            "type": "object"
+          },
+          "members": {
+            "type": "integer"
+          },
+          "completedCycles": {
+            "type": "integer"
+          },
+          "contributions": {
+            "type": "object"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/partner/v1/ping": {
+      "get": {
+        "summary": "Vérifier la clé",
+        "security": [
+          {
+            "partnerKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Clé valide"
+          },
+          "401": {
+            "description": "Clé invalide",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/partner/v1/insights": {
+      "get": {
+        "summary": "Statistiques agrégées",
+        "security": [
+          {
+            "partnerKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Statistiques",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Insights"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Clé invalide"
+          },
+          "403": {
+            "description": "Droit insights:read manquant"
+          },
+          "429": {
+            "description": "Trop de requêtes"
+          }
+        }
+      }
+    },
+    "/v1/developers/key-requests": {
+      "post": {
+        "summary": "Demander une clé API",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "orgName",
+                  "orgType",
+                  "country",
+                  "contactName",
+                  "email",
+                  "useCase",
+                  "consent"
+                ],
+                "properties": {
+                  "orgName": {
+                    "type": "string"
+                  },
+                  "orgType": {
+                    "type": "string",
+                    "enum": [
+                      "banque",
+                      "imf",
+                      "cooperative",
+                      "association",
+                      "ong",
+                      "entreprise",
+                      "developpeur",
+                      "autre"
+                    ]
+                  },
+                  "country": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 2
+                  },
+                  "contactName": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "website": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "useCase": {
+                    "type": "string",
+                    "minLength": 30
+                  },
+                  "volume": {
+                    "type": "string",
+                    "enum": [
+                      "<100",
+                      "100-1000",
+                      "1000-10000",
+                      ">10000"
+                    ]
+                  },
+                  "consent": {
+                    "type": "boolean",
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Demande enregistrée"
+          },
+          "400": {
+            "description": "Champs invalides"
+          },
+          "429": {
+            "description": "Trop de demandes"
+          }
+        }
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "summary": "État de l’API",
+        "responses": {
+          "200": {
+            "description": "Opérationnelle"
+          },
+          "503": {
+            "description": "En configuration"
+          }
+        }
+      }
+    }
+  }
+}
