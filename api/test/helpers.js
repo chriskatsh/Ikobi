@@ -21,6 +21,9 @@ export async function setup(overrides = {}) {
   });
   const db = createDb(config.db);
   await migrate(db);
+  // La grille de production est semée par la migration 004 ; les tests partent d'une grille vide
+  // (sauf keepFees) pour que chaque scénario déclare ses propres frais.
+  if (!overrides.keepFees) await db('fee_rules').del();
   const psp = createMockProvider();
   const whatsapp = createMockWhatsApp();
   const pushes = [];

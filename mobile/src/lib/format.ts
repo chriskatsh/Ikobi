@@ -30,6 +30,8 @@ export function dueLabel(iso: string) {
   return `en retard de ${-d} j`;
 }
 
+export const pct = (n: number) => `${String(n).replace('.', ',')} %`;
+
 export const FREQ: Record<string, string> = { weekly: 'Chaque semaine', biweekly: 'Toutes les 2 semaines', monthly: 'Chaque mois' };
 
 // Numéros RDC : 243XXXXXXXXX

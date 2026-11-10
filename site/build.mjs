@@ -216,7 +216,7 @@ pages['/'] = {
     <div>
       <h3>Ce que fait iKobi</h3>
       <ul class="ticks">
-        <li>Les frais éventuels sont affichés avant chaque paiement, avec le total exact.</li>
+        <li>Les frais sont affichés avant chaque paiement, avec le total exact : 3,5 % par cotisation, 5 % sur la cagnotte reçue.</li>
         <li>Chaque cotisation est confirmée par l’opérateur avant d’être comptée.</li>
         <li>Chaque versement est demandé par l’organisateur puis vérifié par l’équipe iKobi.</li>
         <li>Chaque mouvement d’argent est inscrit dans un registre qu’on ne peut pas modifier après coup.</li>
@@ -261,10 +261,10 @@ pages['/comment-ca-marche'] = {
     <p class="muted">Huit collègues créent « Tontine Bureau » : 20 000 FC chaque semaine.</p>
     <ul class="ticks">
       <li>À chaque tour, sept membres cotisent 20 000 FC. Le bénéficiaire du tour ne cotise pas.</li>
-      <li>Le bénéficiaire reçoit 7 × 20 000 FC, soit 140 000 FC.</li>
+      <li>Le bénéficiaire reçoit 7 × 20 000 FC, soit une cagnotte de 140 000 FC, versée 133 000 FC nets après frais de service et de retrait.</li>
       <li>Après huit semaines, chacun a reçu la cagnotte une fois et versé 140 000 FC au total.</li>
     </ul>
-    <p class="note">Recevoir tôt revient à être avancé par le groupe ; recevoir tard revient à épargner. Personne ne gagne ni ne perd d’argent dans une tontine qui va jusqu’au bout, hors frais d’opérateur.</p>
+    <p class="note">Recevoir tôt revient à être avancé par le groupe ; recevoir tard revient à épargner. Une tontine ne rapporte pas d’intérêts : chacun récupère ce qu’il a versé, moins les frais de paiement et de service (<a href=\"/tarifs\">voir les tarifs</a>).</p>
   </div>
   ${circleSvg()}
 </div></section>
@@ -292,10 +292,10 @@ ${downloadBlock}`,
 
 pages['/tarifs'] = {
   title: 'Tarifs et frais — iKobi',
-  description: 'Les frais d’iKobi sont affichés avant chaque paiement, avec le total exact. Créer une tontine, inviter des membres et utiliser WhatsApp sont gratuits.',
+  description: 'Créer une tontine est gratuit. 3,5 % de frais de paiement par cotisation ; 2 % de frais de service et 3 % de frais de retrait sur la cagnotte reçue. Tout est affiché avant de payer.',
   body: `<section class="page-head"><div class="wrap">
   <h1>Tarifs et frais</h1>
-  <p class="lead">Aucun frais caché : le montant exact à payer s’affiche avant que vous confirmiez, dans l’app comme sur WhatsApp.</p>
+  <p class="lead">Créer et gérer une tontine est gratuit. Vous payez des frais seulement quand l’argent circule, et le montant exact s’affiche toujours avant de confirmer.</p>
 </div></section>
 <section><div class="wrap u-stack-xl">
   <div class="table-wrap"><table class="stack">
@@ -304,20 +304,28 @@ pages['/tarifs'] = {
       <tr><td data-label="Service">Télécharger l’app, créer un compte</td><td data-label="Prix" class="num">Gratuit</td><td data-label="Précisions" class="muted">Connexion par code WhatsApp, sans mot de passe.</td></tr>
       <tr><td data-label="Service">Créer une tontine, inviter des membres</td><td data-label="Prix" class="num">Gratuit</td><td data-label="Précisions" class="muted">Sans limite de nombre de tontines.</td></tr>
       <tr><td data-label="Service">Assistant WhatsApp et rappels</td><td data-label="Prix" class="num">Gratuit</td><td data-label="Précisions" class="muted">Les frais de connexion internet restent ceux de votre opérateur.</td></tr>
-      <tr><td data-label="Service">Payer une cotisation</td><td data-label="Prix" class="num">Affiché avant paiement</td><td data-label="Précisions" class="muted">Les frais de traitement éventuels s’ajoutent à la cotisation et sont montrés avec le total.</td></tr>
-      <tr><td data-label="Service">Recevoir la cagnotte</td><td data-label="Prix" class="num">Affiché avant versement</td><td data-label="Précisions" class="muted">Les frais de versement éventuels sont déduits et le montant net est indiqué.</td></tr>
+      <tr><td data-label="Service">Payer une cotisation</td><td data-label="Prix" class="num">3,5 %</td><td data-label="Précisions" class="muted">Frais de paiement Mobile Money, ajoutés à la cotisation. Le total exact s’affiche avant de payer.</td></tr>
+      <tr><td data-label="Service">Recevoir la cagnotte</td><td data-label="Prix" class="num">2 % + 3 %</td><td data-label="Précisions" class="muted">Frais de service iKobi (2 %) et frais de retrait Mobile Money (3 %), déduits de la cagnotte. Le montant net est indiqué avant de rejoindre une tontine.</td></tr>
     </tbody>
   </table></div>
   <div class="split u-start">
     <div class="copy">
-      <h2>À quoi ressemble un récapitulatif</h2>
-      <p class="muted">Avant chaque cotisation, l’app affiche ce récapitulatif. Les montants ci-contre sont un exemple de présentation, pas un tarif.</p>
-      <p class="note">Notre grille de frais définitive est en cours de validation avec notre partenaire de paiement. Elle sera publiée sur cette page avant l’ouverture des paiements.</p>
+      <h2>Un exemple complet</h2>
+      <p class="muted">Huit membres, 20 000 FC par tour. Chaque membre paie 20 700 FC par cotisation ; à son tour, il reçoit 133 000 FC nets sur son Mobile Money.</p>
+      <p class="note">Les frais de paiement couvrent les opérateurs Mobile Money et notre passerelle de paiement. Le frais de service iKobi n’est prélevé qu’une fois, sur la cagnotte reçue.</p>
     </div>
-    <div class="receipt" aria-label="Exemple de récapitulatif de paiement">
-      <div><span class="muted">Cotisation</span><span>20 000 FC</span></div>
-      <div><span class="muted">Frais de traitement</span><span>exemple</span></div>
-      <div class="total"><span>Total à payer</span><span>affiché ici</span></div>
+    <div class="u-stack">
+      <div class="receipt" aria-label="Exemple : une cotisation">
+        <div><span class="muted">Cotisation</span><span>20 000 FC</span></div>
+        <div><span class="muted">Frais de paiement (3,5 %)</span><span>700 FC</span></div>
+        <div class="total"><span>Total payé</span><span>20 700 FC</span></div>
+      </div>
+      <div class="receipt" aria-label="Exemple : la cagnotte reçue">
+        <div><span class="muted">Cagnotte (7 × 20 000 FC)</span><span>140 000 FC</span></div>
+        <div><span class="muted">Frais de service iKobi (2 %)</span><span>− 2 800 FC</span></div>
+        <div><span class="muted">Frais de retrait (3 %)</span><span>− 4 200 FC</span></div>
+        <div class="total"><span>Vous recevez</span><span>133 000 FC</span></div>
+      </div>
     </div>
   </div>
 </div></section>
@@ -401,7 +409,7 @@ pages['/partenaires'] = {
 
 const FAQ = [
   ['Qu’est-ce qu’une likelemba ?', ['Une tontine tournante : un groupe de personnes de confiance cotise le même montant à intervalles réguliers, et à chaque tour un membre différent reçoit toute la cagnotte. Quand chacun l’a reçue une fois, la tontine est terminée.']],
-  ['Combien coûte iKobi ?', ['Créer une tontine, inviter des membres et utiliser l’assistant WhatsApp sont gratuits. Les frais de paiement éventuels sont affichés avant chaque paiement, avec le total exact. <a href="/tarifs">Voir les tarifs</a>.']],
+  ['Combien coûte iKobi ?', ['Créer une tontine, inviter des membres et utiliser l’assistant WhatsApp sont gratuits. Chaque cotisation comporte 3,5 % de frais de paiement, ajoutés au montant. À la réception de la cagnotte, 2 % de frais de service iKobi et 3 % de frais de retrait sont déduits. Tout est affiché avant de confirmer. <a href="/tarifs">Voir les tarifs</a>.']],
   ['Quels moyens de paiement sont acceptés ?', ['M-Pesa (Vodacom), Orange Money, Airtel Money et Afrimoney (Africell), en francs congolais. Le dollar n’est pas encore disponible.']],
   ['Comment se connecter ?', ['Avec votre numéro de téléphone : nous vous envoyons un code à six chiffres sur WhatsApp. Il n’y a pas de mot de passe à retenir.']],
   ['iKobi peut-il me demander mon code PIN ?', ['Jamais. Le code PIN se saisit uniquement dans la fenêtre de votre opérateur, sur l’écran de votre téléphone. Si quelqu’un vous le demande au nom d’iKobi, c’est une arnaque : signalez-la à <a href="mailto:' + CONTACT + '">' + CONTACT + '</a>.']],

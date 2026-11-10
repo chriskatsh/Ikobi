@@ -20,20 +20,26 @@ const createGroupSchema = z.object({
   payoutMethod: methodEnum.optional(),
 });
 
-export function apiRoutes({ auth, tontine, payments, db, config }) {
+export function apiRoutes({ auth, tontine, payments, fees, db, config }) {
   const r = Router();
   const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
 
   r.get('/health', (_req, res) => res.json({ ok: true, service: 'ikobi-api', mode: config.nodeEnv }));
 
-  r.get('/config', (_req, res) =>
+  r.get('/config', ah(async (_req, res) => {
+    // Taux génériques, pour les estimations affichées avant tout engagement (création, aperçu).
+    const pct = async (txType, component) => ((await fees.findRule({ txType, component, country: 'CD', provider: 'awa', method: '*', currency: 'CDF' }))?.pct_bp ?? 0) / 100;
     res.json({
+      fees: {
+        contribution: { processing: await pct('contribution', 'processing'), service: await pct('contribution', 'service') },
+        payout: { processing: await pct('payout', 'processing'), service: await pct('payout', 'service') },
+      },
       methods: Object.entries(METHODS).map(([id, label]) => ({ id, label })),
       currencies: payments.supportedCurrencies('CD'),
       whatsappNumber: config.whatsapp.botNumberDisplay || null,
       requireSettlement: config.requireSettlement,
-    }),
-  );
+    });
+  }));
 
   // --- Authentification
   r.post('/auth/otp/request', authLimiter, ah(async (req, res) => {

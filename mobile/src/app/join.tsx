@@ -11,7 +11,7 @@ import { C, F, S } from '@/theme';
 
 type Preview = {
   id: number; name: string; amount: number; currency: string; frequency: string; startDate: string;
-  members: number; maxMembers: number; potWhenFull: number; organizer: string; status: string; canJoin: boolean; alreadyMember: boolean;
+  members: number; maxMembers: number; potWhenFull: number; payoutFees: { net: number; serviceFee: number; processingFee: number }; organizer: string; status: string; canJoin: boolean; alreadyMember: boolean;
 };
 
 const CODE_LEN = 6;
@@ -84,7 +84,9 @@ export default function Join() {
             <KV label="Membres" value={`${preview.members} sur ${preview.maxMembers}`} />
             <KV label="Première échéance" value={dateFr(preview.startDate)} />
             <View style={s.sep} />
-            <KV label="Cagnotte à votre tour" value={money(preview.potWhenFull, preview.currency)} strong tone="green" />
+            <KV label="Cagnotte à votre tour" value={money(preview.potWhenFull, preview.currency)} />
+            <KV label="Frais de service et de retrait" value={`− ${money(preview.payoutFees.serviceFee + preview.payoutFees.processingFee, preview.currency)}`} />
+            <KV label="Vous recevrez" value={money(preview.payoutFees.net, preview.currency)} strong tone="green" />
           </Card>
           {!preview.canJoin && !preview.alreadyMember ? (
             <ErrorBox message={preview.status !== 'forming' ? 'Cette tontine a déjà démarré : on ne peut plus la rejoindre.' : 'Cette tontine est complète.'} />
@@ -94,7 +96,7 @@ export default function Join() {
               <View style={s.engage}>
                 <Ionicons name="information-circle-outline" size={18} color={C.muted} />
                 <Text style={s.engageText}>
-                  En rejoignant, vous vous engagez à cotiser {money(preview.amount, preview.currency)} à chaque tour, jusqu’au dernier.
+                  En rejoignant, vous vous engagez à cotiser {money(preview.amount, preview.currency)} à chaque tour, jusqu’au dernier, plus les frais de paiement affichés avant chaque cotisation.
                 </Text>
               </View>
               <PhoneInput label="Numéro pour recevoir votre cagnotte" value={payout} onChange={setPayout} hint={op ? `Opérateur détecté : ${OPERATOR_INFO[op].label}` : undefined} />

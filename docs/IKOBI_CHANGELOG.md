@@ -1,5 +1,10 @@
 # iKobi — Journal des changements
 
+## Grille de frais (10/11/2026)
+- Frais en deux composantes (paiement / service iKobi), migration 004 qui sème la grille validée : dépôt 3,5 %, retrait 3 %, service 2 % sur la cagnotte versée.
+- Affichage partout : récapitulatif et reçu de paiement, cagnotte nette (page tontine, aperçu d'adhésion, assistant de création), assistant WhatsApp, page Tarifs et FAQ du site.
+- Règlement : relevé AWA accepté brut ou net des frais de paiement. 45 tests.
+
 ## Refonte UX/UI (10/11/2026)
 - Audit UX (`docs/IKOBI_UX_AUDIT.md`) : 14 constats priorisés, personas, principes.
 - App : polices de la marque, icônes, carte « prochaine action », création en 3 étapes avec montants suggérés et dates rapides, aperçu avant adhésion (`GET /v1/groups/preview`), page tontine à onglets avec action fixe, paiement avec grille d'opérateurs, attente guidée et reçu partageable, squelettes, erreurs avec « Réessayer », toasts, vouvoiement.

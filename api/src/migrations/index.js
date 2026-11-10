@@ -250,6 +250,28 @@ migrations.push({
   },
 });
 
+// Frais : deux composantes (service iKobi / frais de paiement) et grille validée le 10/11/2026.
+migrations.push({
+  id: '004_fee_components',
+  async up(knex) {
+    await knex.schema.alterTable('fee_rules', (t) => {
+      t.string('component', 12).notNullable().defaultTo('processing'); // processing | service
+    });
+    await knex.schema.alterTable('contributions', (t) => {
+      t.bigInteger('service_fee_minor').notNullable().defaultTo(0);
+    });
+    await knex.schema.alterTable('payouts', (t) => {
+      t.bigInteger('service_fee_minor').notNullable().defaultTo(0);
+    });
+    // Grille validée par le fondateur : dépôt 3,5 % (paiement), retrait 3 % (paiement) + 2 % (service iKobi).
+    await knex('fee_rules').insert([
+      { tx_type: 'contribution', component: 'processing', pct_bp: 350 },
+      { tx_type: 'payout', component: 'processing', pct_bp: 300 },
+      { tx_type: 'payout', component: 'service', pct_bp: 200 },
+    ]);
+  },
+});
+
 export async function migrate(knex) {
   const has = await knex.schema.hasTable('ikobi_migrations');
   if (!has) {

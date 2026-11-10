@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { api, ApiError, type GroupDetail } from '@/lib/api';
-import { dateFr, detectOperator, FREQ, money, todayIso } from '@/lib/format';
+import { api, ApiError, type AppConfig, type GroupDetail } from '@/lib/api';
+import { dateFr, detectOperator, FREQ, money, pct, todayIso } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { OPERATOR_INFO } from '@/operators';
 import { ActionBar, AmountInput, Button, Card, Chip, ErrorBox, Field, H1, KV, Muted, PhoneInput, Screen, Segmented, Stepper, Steps } from '@/ui';
@@ -49,7 +49,22 @@ export default function Create() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [cfg, setCfg] = useState<AppConfig | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api<AppConfig>('/config').then((c) => alive && setCfg(c)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const amt = Number(amount);
+  // Estimations affichées avant création (mêmes arrondis que le serveur : au franc supérieur, par composante)
+  const fee = (base: number, rate: number) => Math.ceil(base * rate) / 100;
+  const pot = amt * (members - 1);
+  const payService = cfg ? fee(pot, cfg.fees.payout.service) : 0;
+  const payProcessing = cfg ? fee(pot, cfg.fees.payout.processing) : 0;
+  const contribFee = cfg ? fee(amt, cfg.fees.contribution.processing) + fee(amt, cfg.fees.contribution.service) : 0;
   const quick = useMemo(
     () => [
       { label: 'Aujourd’hui', date: today },
@@ -162,8 +177,20 @@ export default function Create() {
             <KV label="Première échéance" value={dateFr(startDate)} />
             <KV label="Dernière échéance" value={dateFr(endDate(startDate, frequency, members))} />
             <View style={s.sep} />
-            <KV label="Cagnotte à chaque tour" value={money(amt * (members - 1), 'CDF')} strong tone="green" />
+            <KV label="Cagnotte à chaque tour" value={money(pot, 'CDF')} />
+            {cfg ? (
+              <>
+                <KV label={`Frais de service iKobi (${pct(cfg.fees.payout.service)})`} value={`− ${money(payService, 'CDF')}`} />
+                <KV label={`Frais de retrait (${pct(cfg.fees.payout.processing)})`} value={`− ${money(payProcessing, 'CDF')}`} />
+              </>
+            ) : null}
+            <KV label="Versé à chaque bénéficiaire" value={money(pot - payService - payProcessing, 'CDF')} strong tone="green" />
           </Card>
+          {cfg && contribFee > 0 ? (
+            <Muted style={{ fontSize: 13 }}>
+              Chaque cotisation coûtera {money(amt + contribFee, 'CDF')} au membre, dont {money(contribFee, 'CDF')} de frais de paiement ({pct(cfg.fees.contribution.processing)}).
+            </Muted>
+          ) : null}
           <PhoneInput label="Votre numéro pour recevoir la cagnotte" value={payout} onChange={setPayout} hint={op ? `Opérateur détecté : ${OPERATOR_INFO[op].label}` : 'M-Pesa, Orange Money, Airtel Money ou Afrimoney'} />
           <ErrorBox message={error} />
         </>

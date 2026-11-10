@@ -114,7 +114,7 @@ export function createApp({ db, config, providers, whatsapp, services, logger = 
   app.use('/partner/v1', partnerRoutes({ developers: s.developers }));
   app.use('/v1/ops', opsRoutes({ auth: s.auth, tontine: s.tontine, audit: s.audit, developers: s.developers, db }));
   app.use('/v1', developerPublicRoutes({ developers: s.developers }));
-  app.use('/v1', apiRoutes({ auth: s.auth, tontine: s.tontine, payments: s.payments, db, config }));
+  app.use('/v1', apiRoutes({ auth: s.auth, tontine: s.tontine, payments: s.payments, fees: s.fees, db, config }));
 
   app.use((_req, res) => res.status(404).json({ error: { code: 'not_found', message: 'Route introuvable' } }));
   app.use(errorHandler(logger));

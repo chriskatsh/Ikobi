@@ -139,7 +139,7 @@ export function createBot({ db, whatsapp, tontine, config, logger = console }) {
     let feeLine = '';
     if (method) {
       const q = await tontine.quoteContribution(user.id, d.group_id, method).catch(() => null);
-      if (q && q.fee > 0) feeLine = `\nFrais : ${formatMoney(Math.round(q.fee * 100), d.currency)}\n*Total à payer : ${formatMoney(Math.round(q.total * 100), d.currency)}*`;
+      if (q && q.fee > 0) feeLine = `\nFrais de paiement (${String(q.rates.processing).replace('.', ',')} %) : ${formatMoney(Math.round(q.fee * 100), d.currency)}\n*Total à payer : ${formatMoney(Math.round(q.total * 100), d.currency)}*`;
     }
     const text = `💸 *Cotisation ${d.name}*\nTour ${d.number} · échéance ${formatDateFr(d.due_date)}\n\nMontant : *${amount}*${feeLine}\nNuméro : ${maskPhone(payPhone)}\n\nTu vas recevoir une demande de paiement sur ton téléphone.`;
     const buttons = method

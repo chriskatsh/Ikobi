@@ -26,6 +26,48 @@ async function payAll(t, gid, users, phones) {
   return refs;
 }
 
+describe('grille de frais de production (3,5 % dépôt, 3 % retrait, 2 % service)', () => {
+  let t, fin;
+  before(async () => {
+    t = await setup({ keepFees: true });
+    fin = await t.login('0899999999', 'Finance');
+  });
+  after(() => t.close());
+
+  test('cotisation 20 000 FC : 700 FC de frais de paiement, total 20 700 FC', async () => {
+    const owner = await t.login('0812000001', 'Aline');
+    const m2 = await t.login('0972000002', 'Ben');
+    const g = await t.agent.post('/v1/groups').set(owner.auth).send({ name: 'Grille', amount: 20000, currency: 'CDF', frequency: 'weekly', maxMembers: 8, startDate: '2030-01-01', payoutPhone: '0812000001' });
+    // aperçu : cagnotte nette estimée avant de rejoindre
+    const prev = await t.agent.get(`/v1/groups/preview?code=${g.body.inviteCode}`).set(m2.auth);
+    assert.deepEqual([prev.body.payoutFees.gross, prev.body.payoutFees.serviceFee, prev.body.payoutFees.processingFee, prev.body.payoutFees.net], [140000, 2800, 4200, 133000]);
+    await t.agent.post('/v1/groups/join').set(m2.auth).send({ code: g.body.inviteCode, payoutPhone: '0972000002' });
+    await t.agent.post(`/v1/groups/${g.body.id}/start`).set(owner.auth).send({});
+    const q = await t.agent.get(`/v1/groups/${g.body.id}/contributions/quote?method=airtel`).set(m2.auth);
+    assert.deepEqual([q.body.principal, q.body.processingFee, q.body.serviceFee, q.body.total], [20000, 700, 0, 20700]);
+    assert.deepEqual(q.body.rates, { processing: 3.5, service: 0 });
+    const r = await t.agent.post(`/v1/groups/${g.body.id}/contributions`).set(m2.auth).send({ phone: '0972000002' });
+    assert.equal(t.psp.txs.get(r.body.reference).amount, 20700);
+    await t.callback(r.body.reference, 'Success', { amount: 20700 });
+
+    // Relevé AWA net de ses frais (20 000) : accepté, et le compte de passage est soldé
+    const st = await t.agent.post('/v1/ops/settlements').set(fin.auth).send({ provider: 'awa', currency: 'CDF', references: [r.body.reference], statementTotal: 20000 });
+    assert.equal(st.status, 200, JSON.stringify(st.body));
+    assert.equal(st.body.netOfProcessingFees, true);
+    assert.equal(await t.services.ledger.balance('fees:processing:awa', 'CDF'), 0);
+
+    // Versement : 20 000 brut (2 membres) − 2 % service − 3 % retrait = 19 000 net
+    const req = await t.agent.post(`/v1/groups/${g.body.id}/cycles/1/payout-request`).set(owner.auth);
+    const ok = await t.agent.post(`/v1/ops/payout-requests/${req.body.id}/review`).set(fin.auth).send({ decision: 'approve' });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    assert.equal(t.psp.txs.get(ok.body.reference).amount, 19000);
+    await t.callback(ok.body.reference, 'Success');
+    assert.equal(await t.services.ledger.balance('revenue:service', 'CDF'), -40000); // 400 FC en centimes
+    assert.equal(await t.services.ledger.balance(`pool:${g.body.id}`, 'CDF'), 0);
+    assert.equal((await t.services.ledger.trialBalance()).balanced, true);
+  });
+});
+
 describe('intégrité financière', () => {
   let t, fin;
   before(async () => {
@@ -45,7 +87,7 @@ describe('intégrité financière', () => {
     await t.callback(r.body.reference, 'Success');
     const rec = await t.agent.get('/v1/ops/reconciliation').set(fin.auth);
     assert.equal(rec.body.ledgerBalanced, true);
-    const fees = rec.body.accounts.find((a) => a.account === 'revenue:fees');
+    const fees = rec.body.accounts.find((a) => a.account === 'fees:processing:awa');
     assert.equal(fees.balance, -1.5);
     await t.db('fee_rules').del();
   });
